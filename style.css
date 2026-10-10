@@ -219,3 +219,136 @@ button {
 #testPanel input {
   max-width: 45vw;
 }
+
+.panel {
+  max-height: 92dvh;
+  overflow: auto;
+}
+#start h1,
+#finish h1 {
+  font-size: clamp(24px, 5vw, 36px);
+}
+#start > p {
+  font-size: clamp(16px, 3vw, 20px);
+  line-height: 1.4;
+}
+.settings {
+  text-align: left;
+  border: 1px solid #93aa97;
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 10px;
+  font-size: 14px;
+}
+.settings label {
+  display: block;
+  margin: 8px 0;
+}
+.settings input[type="range"] {
+  width: 100%;
+  accent-color: #287a4a;
+}
+.settings .hint,
+#finish .hint {
+  font-size: 12px !important;
+  line-height: 1.5;
+  font-weight: 500;
+}
+.settings input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  vertical-align: middle;
+}
+.durationInputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#durationNumber {
+  width: 70px;
+  padding: 5px;
+  font: inherit;
+}
+.settingError {
+  color: #a52717;
+  font-size: 13px !important;
+  margin: 0;
+}
+.consent {
+  font-weight: 700;
+}
+#photoStatus {
+  position: absolute;
+  z-index: 5;
+  top: 68px;
+  left: 12px;
+  max-width: 55%;
+  background: #ffffffe6;
+  border-radius: 8px;
+  padding: 5px;
+  font-size: 12px;
+}
+#stopPhotoBtn {
+  position: absolute;
+  z-index: 14;
+  top: 105px;
+  left: 12px;
+  padding: 8px;
+  font-size: 12px;
+}
+.photoGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.photoThumb {
+  padding: 4px;
+  margin: 0;
+  border-radius: 8px;
+  background: #eaf3ec;
+  color: #173b2a;
+  font-size: 11px;
+  border: 3px solid transparent;
+}
+.photoThumb img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: 5px;
+}
+.photoThumb[aria-pressed="true"] {
+  border-color: #287a4a;
+  background: #d7f6b2;
+}
+.photoActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+#photoDialog {
+  max-width: 95vw;
+  max-height: 95dvh;
+  border: 0;
+  border-radius: 16px;
+  text-align: center;
+  color: #173b2a;
+}
+#photoPreview {
+  display: block;
+  max-width: 80vw;
+  max-height: 65dvh;
+  object-fit: contain;
+  margin: auto;
+}
+#photoDialog::backdrop {
+  background: #0009;
+}
+#app:has(#start:not(.hidden))
+  :is(#hud, #skeletonToggle, #skeletonHud, #researchToggle, #photoStatus) {
+  display: none;
+}

@@ -1,4 +1,13 @@
 import { screenPoint, screenAxis, HandWind, AutumnLeaves } from "./autumn.mjs";
+import {
+  TrialClock,
+  validDuration,
+  sensitivityGain,
+  restoreSensitivities,
+} from "./trial.mjs";
+import { PhotoSession } from "./photos.mjs";
+import { PhotoUI } from "./photo-ui.mjs";
+import { FaceCapture } from "./face-capture.mjs";
 const $ = (s) => document.querySelector(s),
   canvas = $("#world"),
   ctx = canvas.getContext("2d"),
@@ -13,7 +22,6 @@ let pose,
   running = false,
   test = false,
   lastT = 0,
-  startT = 0,
   lastVideo = -1,
   growth = 0,
   wind = 0,
@@ -69,6 +77,83 @@ const hands = [new HandWind(), new HandWind()];
 const autumn = new AutumnLeaves(innerWidth, innerHeight);
 let lastPoseT = 0,
   lastInputT = 0;
+const clock = new TrialClock(),
+  photos = new PhotoSession(),
+  photoUI = new PhotoUI(photos);
+let configuredDurationSec = 30,
+  lastSimulationMs = 0,
+  finishCount = 0,
+  starting = false,
+  trialGeneration = 0,
+  resultInfo = {};
+let sensitivities = { body: 70, left: 70, right: 70 };
+try {
+  sensitivities = restoreSensitivities(localStorage);
+} catch {}
+let gains = Object.fromEntries(
+  Object.entries(sensitivities).map(([key, value]) => [
+    key,
+    sensitivityGain(value),
+  ]),
+);
+const faceCapture = new FaceCapture({
+  video,
+  session: photos,
+  onStatus: (message) => ($("#photoStatus").textContent = message),
+  onPhoto: () => photoUI.render(),
+  getElapsed: () => clock.snapshot().elapsedMs,
+  isPlaying: () => running && !clock.paused && !document.hidden,
+});
+window.windTreePhotoGift = Object.freeze({
+  getSelectedGift: () => photos.getSelectedGift(resultInfo),
+});
+for (const side of ["body", "left", "right"]) {
+  const input = $(`#${side}Sensitivity`);
+  input.value = sensitivities[side];
+  $(`#${side}SensitivityValue`).textContent = `${input.value}%`;
+  input.addEventListener("input", () => {
+    sensitivities[side] = +input.value;
+    gains[side] = sensitivityGain(input.value);
+    $(`#${side}SensitivityValue`).textContent = `${input.value}%`;
+    try {
+      localStorage.setItem(
+        "windTreeSensitivities",
+        JSON.stringify(sensitivities),
+      );
+    } catch {}
+  });
+}
+$("#durationRange").oninput = () => {
+  $("#durationNumber").value = $("#durationRange").value;
+  $("#durationError").textContent = "";
+  $("#durationNumber").setAttribute("aria-invalid", "false");
+  if (clock.phase === "idle")
+    $("#timer").textContent = $("#durationRange").value;
+};
+$("#durationNumber").oninput = () => {
+  const value = validDuration($("#durationNumber").value);
+  $("#durationError").textContent =
+    value === null ? "1〜60秒の整数を入力してください" : "";
+  $("#durationNumber").setAttribute("aria-invalid", String(value === null));
+  if (value !== null) {
+    $("#durationRange").value = value;
+    if (clock.phase === "idle") $("#timer").textContent = value;
+  }
+};
+$("#smileThreshold").oninput = () =>
+  ($("#smileThresholdValue").textContent = `${$("#smileThreshold").value}%`);
+$("#photoConsent").onchange = () => {
+  if (!$("#photoConsent").checked) {
+    $("#smileEnabled").checked = false;
+    $("#photoStatus").textContent = "同意がないため撮影OFFです";
+  }
+};
+$("#stopPhotoBtn").onclick = () => {
+  faceCapture.stop();
+  $("#stopPhotoBtn").classList.add("hidden");
+  $("#photoStatus").textContent = "撮影を停止しました";
+};
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
   lerp = (a, b, t) => a + (b - a) * t;
 function resize() {
@@ -408,6 +493,19 @@ function updateSkeletonHud() {
   $("#windStatus").textContent = `WIND: ${wind.toFixed(2)}`;
   $("#treeStatus").textContent = `TREE GROWTH: ${growth.toFixed(2)}`;
 }
+function staffMetrics() {
+  const speeds = autumn.leaves.map((p) => Math.hypot(p.vx, p.vy));
+  return {
+    bodyGain: gains.body,
+    leftGain: gains.left,
+    rightGain: gains.right,
+    maxLeafSpeed: Math.max(0, ...speeds),
+    leftWindX: hands[0].vx * gains.left,
+    leftWindY: hands[0].vy * gains.left,
+    rightWindX: hands[1].vx * gains.right,
+    rightWindY: hands[1].vy * gains.right,
+  };
+}
 function render() {
   const W = innerWidth,
     H = innerHeight;
@@ -429,22 +527,107 @@ function render() {
   drawSkeleton();
   drawHandWind();
   updateSkeletonHud();
+  if (skeleton) {
+    const m = staffMetrics();
+    $("#gainStatus").textContent =
+      `GAIN body ${m.bodyGain.toFixed(2)} / L ${m.leftGain.toFixed(2)} / R ${m.rightGain.toFixed(2)}`;
+    $("#leafVelocityStatus").textContent =
+      `LEAF MAX ${m.maxLeafSpeed.toFixed(1)} px/s`;
+    $("#windVectorStatus").textContent =
+      `WIND body ${autumn.bodyWind.toFixed(0)} | L (${m.leftWindX.toFixed(0)},${m.leftWindY.toFixed(0)}) R (${m.rightWindX.toFixed(0)},${m.rightWindY.toFixed(0)})`;
+  }
 }
-function finish() {
-  running = false;
-  $("#finish").classList.remove("hidden");
-  $("#result").textContent =
-    growth > 0.8 ? "🌸✨🌳✨🦋" : growth > 0.5 ? "🌿🌳🍃" : "🌱🌿";
+function stopCamera() {
   if (stream) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;
   }
+  video.srcObject = null;
 }
+function finish() {
+  if (finishCount) return;
+  finishCount++;
+  running = false;
+  faceCapture.stop();
+  stopCamera();
+  $("#stopPhotoBtn").classList.add("hidden");
+  resultInfo = {
+    treeGrowth: growth,
+    difficulty,
+    configuredDurationSec,
+    activePlayTimeSec: clock.elapsedMs / 1000,
+    sensitivities: { ...sensitivities },
+  };
+  $("#finish").classList.remove("hidden");
+  $("#result").textContent =
+    growth > 0.8 ? "🌸✨🌳✨🦋" : growth > 0.5 ? "🌿🌳🍃" : "🌱🌿";
+  photoUI.render();
+}
+function syncClock(t) {
+  const state = clock.tick(t);
+  if (state.phase === "countdown")
+    $("#message").textContent = state.paused
+      ? "ひとやすみ"
+      : String(state.countdown);
+  if (state.phase === "playing" && !running) {
+    running = true;
+    lastT = t;
+    lastInputT = t;
+    $("#message").textContent = "スタート！";
+  }
+  if (state.phase === "playing" || state.phase === "finished")
+    $("#timer").textContent = state.remainingSec;
+  if (state.phase === "playing" && state.paused)
+    $("#message").textContent = "ひとやすみ";
+  if (state.finishedNow) {
+    recordRow(clamp(1 - Math.abs(axis) / cfg[difficulty].tol, 0, 1));
+    finish();
+  }
+  return state;
+}
+function recordRow(stability) {
+  rows.push({
+    time_ms: Math.round(clock.elapsedMs),
+    bodyAxisAngle: axis.toFixed(3),
+    bodyStability: stability.toFixed(3),
+    leftHandMotion: leftHandMotion.toFixed(4),
+    rightHandMotion: rightHandMotion.toFixed(4),
+    handMotion: ((leftHandMotion + rightHandMotion) / 2).toFixed(4),
+    windStrength: wind.toFixed(3),
+    treeGrowth: growth.toFixed(3),
+    bodyAxisWind: autumn.bodyWind.toFixed(3),
+    leftHandWind: hands[0].strength.toFixed(4),
+    rightHandWind: hands[1].strength.toFixed(4),
+    leafCount: autumn.leaves.length,
+    configuredDurationSec,
+    activePlayTimeSec: (clock.elapsedMs / 1000).toFixed(3),
+    bodySensitivityPercent: sensitivities.body,
+    leftSensitivityPercent: sensitivities.left,
+    rightSensitivityPercent: sensitivities.right,
+  });
+}
+function handleVisibility() {
+  const now = performance.now();
+  syncClock(now);
+  clock.setPaused(document.hidden, now);
+  lastSimulationMs = clock.elapsedMs;
+  lastT = 0;
+  lastPoseT = 0;
+  prev = null;
+  hands.forEach((h) => h.reset());
+  faceCapture.pause();
+  if (!document.hidden && clock.phase === "playing")
+    $("#message").textContent = "再開！";
+}
+document.addEventListener("visibilitychange", handleVisibility);
+// The clock is independent of video frames and inference. Hidden time is excluded.
+setInterval(() => syncClock(performance.now()), 100);
 function loop(t) {
-  const rawDt = lastT ? t - lastT : 0,
-    dt = Math.min(250, rawDt);
+  const state = syncClock(t),
+    dt = Math.min(250, Math.max(0, state.elapsedMs - lastSimulationMs));
+  lastSimulationMs = state.elapsedMs;
   lastT = t;
-  if (running) {
+  if (running && !state.paused) {
     let f = null;
     if (test) {
       poseDetected = false;
@@ -453,7 +636,8 @@ function loop(t) {
     } else if (
       pose &&
       video.readyState >= 2 &&
-      video.currentTime !== lastVideo
+      video.currentTime !== lastVideo &&
+      t - lastPoseT >= 33
     ) {
       lastVideo = video.currentTime;
       try {
@@ -502,14 +686,16 @@ function loop(t) {
       1 - Math.exp(-dt / 110),
     );
     if ((test || t - lastInputT <= 250) && Math.abs(axis) <= c.tol)
-      growth = clamp(growth + (dt / 30000) * (0.55 + 0.65 * stability), 0, 1);
+      growth = clamp(
+        growth +
+          (dt / (configuredDurationSec * 1000)) * (0.55 + 0.65 * stability),
+        0,
+        1,
+      );
     good = stability > 0.55 && hand > c.hand ? good + dt : 0;
     $("#message").textContent = good > 800 ? "いいかぜ！ ✨" : "";
-    const remain = Math.max(0, 30 - (t - startT) / 1000),
-      activeDt = Math.min(dt, Math.max(0, 30000 - (t - dt - startT)));
-    updateP(activeDt, wind, f?.dir || 1);
-    autumn.update(activeDt / 1000, axis, hands);
-    $("#timer").textContent = Math.ceil(remain);
+    updateP(dt, wind, f?.dir || 1);
+    autumn.update(dt / 1000, axis, hands, gains);
     const metrics = {
       bodyAxisAngle: +axis.toFixed(2),
       bodyStability: +stability.toFixed(2),
@@ -521,79 +707,124 @@ function loop(t) {
       leftHandWind: +hands[0].strength.toFixed(3),
       rightHandWind: +hands[1].strength.toFixed(3),
       leafCount: autumn.leaves.length,
+      configuredDurationSec,
+      activePlayTimeSec: clock.elapsedMs / 1000,
+      bodySensitivityPercent: sensitivities.body,
+      leftSensitivityPercent: sensitivities.left,
+      rightSensitivityPercent: sensitivities.right,
+      ...staffMetrics(),
     };
-    rows.push({
-      time_ms: Math.round(t - startT),
-      bodyAxisAngle: axis.toFixed(3),
-      bodyStability: stability.toFixed(3),
-      leftHandMotion: leftHandMotion.toFixed(4),
-      rightHandMotion: rightHandMotion.toFixed(4),
-      handMotion: hand.toFixed(4),
-      windStrength: wind.toFixed(3),
-      treeGrowth: growth.toFixed(3),
-      bodyAxisWind: autumn.bodyWind.toFixed(3),
-      leftHandWind: hands[0].strength.toFixed(4),
-      rightHandWind: hands[1].strength.toFixed(4),
-      leafCount: autumn.leaves.length,
-    });
+    recordRow(stability);
     $("#metrics").textContent = JSON.stringify(metrics, null, 2);
-    if (remain <= 0) finish();
   }
   render();
   requestAnimationFrame(loop);
 }
+function resetTrial() {
+  trialGeneration++;
+  running = false;
+  starting = false;
+  faceCapture.stop();
+  stopCamera();
+  photoUI.clear();
+  clock.reset();
+  resultInfo = {};
+  finishCount = 0;
+  lastSimulationMs = 0;
+  growth = wind = axis = good = 0;
+  particles = [];
+  rows = [];
+  prev = null;
+  currentLandmarks = null;
+  poseDetected = false;
+  leftHandMotion = rightHandMotion = 0;
+  hands.forEach((h) => h.reset());
+  autumn.reset();
+  lastVideo = -1;
+  lastPoseT = lastT = lastInputT = 0;
+  $("#photoConsent").checked = false;
+  $("#smileEnabled").checked = true;
+  $("#finish").classList.add("hidden");
+  $("#start").classList.remove("hidden");
+  $("#testPanel").classList.add("hidden");
+  $("#stopPhotoBtn").classList.add("hidden");
+  $("#message").textContent = "";
+  $("#startStatus").textContent = "";
+  $("#research").classList.add("hidden");
+  $("#timer").textContent = $("#durationNumber").value;
+  $("#photoStatus").textContent = "撮影は同意確認後に有効になります";
+}
 async function begin(useTest) {
-  if (stream) {
-    stream.getTracks().forEach((t) => t.stop());
-    stream = null;
-  }
-  test = useTest;
-  difficulty = $("#difficulty").value;
-  $("#start").classList.add("hidden");
-  $("#testPanel").classList.toggle("hidden", !test);
-  try {
-    if (!test) await cameraStart();
-  } catch (e) {
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      stream = null;
-    }
-    alert(
-      "カメラを開始できませんでした。PCテストモードを使えます。\n" + e.message,
-    );
-    $("#start").classList.remove("hidden");
+  if (starting || running || clock.phase === "countdown") return;
+  const duration = validDuration($("#durationNumber").value);
+  if (duration === null) {
+    $("#durationError").textContent = "1〜60秒の整数を入力してください";
+    $("#durationNumber").focus();
     return;
   }
-  let n = 3;
-  $("#message").textContent = n;
-  const id = setInterval(() => {
-    n--;
-    $("#message").textContent = n ? String(n) : "スタート！";
-    if (!n) {
-      clearInterval(id);
-      setTimeout(() => ($("#message").textContent = ""), 600);
-      growth = wind = axis = 0;
-      good = 0;
-      particles = [];
-      rows = [];
-      prev = null;
-      currentLandmarks = null;
-      poseDetected = false;
-      leftHandMotion = rightHandMotion = 0;
-      hands.forEach((h) => h.reset());
-      autumn.reset();
-      lastVideo = -1;
-      lastPoseT = 0;
-      lastT = 0;
-      startT = performance.now();
-      lastInputT = startT;
-      running = true;
-    }
-  }, 700);
+  $("#startStatus").textContent = "";
+  starting = true;
+  const generation = ++trialGeneration;
+  faceCapture.stop();
+  stopCamera();
+  photoUI.clear();
+  photos.start(crypto.randomUUID());
+  configuredDurationSec = duration;
+  test = useTest;
+  difficulty = $("#difficulty").value;
+  finishCount = 0;
+  resultInfo = {};
+  lastSimulationMs = 0;
+  growth = wind = axis = good = 0;
+  rows = [];
+  particles = [];
+  prev = null;
+  currentLandmarks = null;
+  poseDetected = false;
+  leftHandMotion = rightHandMotion = 0;
+  hands.forEach((h) => h.reset());
+  autumn.reset();
+  lastVideo = -1;
+  lastPoseT = lastT = 0;
+  const consent = $("#photoConsent").checked,
+    enablePhotos = $("#smileEnabled").checked && consent && !test;
+  if (!consent) $("#smileEnabled").checked = false;
+  $("#start").classList.add("hidden");
+  $("#testPanel").classList.toggle("hidden", !test);
+  $("#timer").textContent = duration;
+  $("#photoStatus").textContent = test
+    ? "PCテストモード：撮影なし"
+    : enablePhotos
+      ? "カメラを準備しています…"
+      : "撮影OFFで遊びます";
+  try {
+    if (!test) await cameraStart();
+  } catch {
+    stopCamera();
+    starting = false;
+    $("#start").classList.remove("hidden");
+    $("#photoStatus").textContent =
+      "カメラを開始できません。許可を確認するかPCテストモードで遊べます。";
+    $("#startStatus").textContent = $("#photoStatus").textContent;
+    return;
+  }
+  if (generation !== trialGeneration) {
+    stopCamera();
+    return;
+  }
+  starting = false;
+  clock.start(performance.now(), duration);
+  clock.setPaused(document.hidden, performance.now());
+  lastInputT = performance.now();
+  $("#message").textContent = "3";
+  if (enablePhotos) {
+    faceCapture.start(+$("#smileThreshold").value / 100);
+    $("#stopPhotoBtn").classList.remove("hidden");
+  }
 }
 $("#startBtn").onclick = () => begin(false);
 $("#testBtn").onclick = () => begin(true);
-$("#againBtn").onclick = () => location.reload();
+$("#againBtn").onclick = resetTrial;
 $("#skeletonToggle").onclick = () => {
   skeleton = !skeleton;
   $("#skeletonToggle").textContent = `SKELETON ${skeleton ? "ON" : "OFF"}`;
@@ -613,12 +844,18 @@ $("#csvBtn").onclick = () => {
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   a.download = "wind-tree-trial.csv";
   a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
+window.addEventListener("pagehide", () => {
+  resetTrial();
+  pose?.close();
+  pose = null;
+});
 requestAnimationFrame(loop);
 
 let draggedHand = null;
 canvas.addEventListener("pointerdown", (e) => {
-  if (!test || !running) return;
+  if (!test || !running || clock.paused) return;
   const distances = hands.map((h) =>
     Math.hypot(h.x - e.clientX, h.y - e.clientY),
   );

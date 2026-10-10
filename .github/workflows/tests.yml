@@ -1,0 +1,33 @@
+name: Tests
+on:
+  push:
+    branches: [main, feat/playtime-sensitivity-smile-capture]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: node --test tests/*.test.mjs
+      - name: Install browser test tools outside the checkout
+        run: |
+          npm install --prefix /tmp/wind-tree-ci --no-audit --no-fund playwright@1.58.2
+          /tmp/wind-tree-ci/node_modules/.bin/playwright install --with-deps chromium
+          node -e "console.log('CHROMIUM_PATH='+require('/tmp/wind-tree-ci/node_modules/playwright').chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Browser regressions
+        env:
+          PLAYWRIGHT_MODULE: /tmp/wind-tree-ci/node_modules/playwright/index.mjs
+        run: |
+          python3 -m http.server 8000 --bind 127.0.0.1 > /tmp/wind-tree-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8000/ > /dev/null
+          node tests/browser.mjs
+          node tests/settings-photos-browser.mjs
