@@ -1,22 +1,637 @@
-import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm";
-const $=s=>document.querySelector(s),canvas=$("#world"),ctx=canvas.getContext("2d"),video=$("#camera");
-const cfg={easy:{tol:10,hand:.10},normal:{tol:6,hand:.14},hard:{tol:3,hand:.18}};
-let pose,stream,running=false,test=false,lastT=0,startT=0,lastVideo=-1,growth=0,wind=0,axis=0,prev,rows=[],particles=[],difficulty="normal",good=0;
-let skeleton=false,currentLandmarks=null,poseDetected=false,leftHandMotion=0,rightHandMotion=0;
-const POSE_CONNECTIONS=[[0,1],[1,2],[2,3],[3,7],[0,4],[4,5],[5,6],[6,8],[9,10],[11,12],[11,13],[13,15],[15,17],[15,19],[15,21],[17,19],[12,14],[14,16],[16,18],[16,20],[16,22],[18,20],[11,23],[12,24],[23,24],[23,25],[24,26],[25,27],[26,28],[27,29],[28,30],[29,31],[30,32],[27,31],[28,32]];
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),lerp=(a,b,t)=>a+(b-a)*t;
-function resize(){canvas.width=innerWidth*devicePixelRatio;canvas.height=innerHeight*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0)}addEventListener("resize",resize);resize();
-async function initPose(){if(pose)return;const vision=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm");pose=await PoseLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minTrackingConfidence:.5,minPosePresenceConfidence:.5})}
-async function cameraStart(){stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:{ideal:960},height:{ideal:720}},audio:false});video.srcObject=stream;await video.play();await initPose()}
-function feat(lm,dt){const S1=lm[11],S2=lm[12],H1=lm[23],H2=lm[24],L=lm[15],R=lm[16];if([S1,S2,H1,H2,L,R].some(p=>!p||p.visibility<.45))return null;const sx=(S1.x+S2.x)/2,sy=(S1.y+S2.y)/2,hx=(H1.x+H2.x)/2,hy=(H1.y+H2.y)/2,a=Math.atan2(sx-hx,hy-sy)*180/Math.PI,sw=Math.hypot(S1.x-S2.x,S1.y-S2.y)||.1;let l=0,r=0,dir=1;if(prev){const scale=Math.max(.35,dt/16.67);l=Math.hypot(L.x-prev.L.x,L.y-prev.L.y)/sw/scale;r=Math.hypot(R.x-prev.R.x,R.y-prev.R.y)/sw/scale;dir=Math.sign((L.x-prev.L.x)+(R.x-prev.R.x))||1}prev={L:{x:L.x,y:L.y},R:{x:R.x,y:R.y}};return{axis:a,left:clamp(l,0,1),right:clamp(r,0,1),dir}}
-function spawn(kind,s,d){particles.push({kind,x:d>0?-40:innerWidth+40,y:innerHeight*(.25+Math.random()*.55),vx:(1+s*5)*d,vy:-.3-Math.random()*.5,life:300})}
-function updateP(dt,s,d){if(Math.random()<s*.12)spawn("🍃",s,d);if(s>.4&&Math.random()<.018)spawn("🦋",s,d);if(s>.72&&Math.random()<.012)spawn("🎈",s,d);for(const p of particles){p.x+=p.vx*dt/16;p.y+=p.vy*dt/16-(p.kind==="🎈"?s*.7:0);p.life-=dt}particles=particles.filter(p=>p.life>0&&p.x>-100&&p.x<innerWidth+100&&p.y>-100)}
-function tree(g,w){const W=innerWidth,H=innerHeight,cx=W/2,base=H*.88,height=70+g*Math.min(H*.58,470),tr=12+g*24;ctx.save();ctx.translate(cx,base);ctx.lineCap="round";ctx.strokeStyle="#654321";ctx.lineWidth=tr;ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(axis*1.1,-height*.45,axis*1.5,-height);ctx.stroke();const n=Math.floor(2+g*7);for(let i=0;i<n;i++){const yy=-height*(.3+i/(n+2)*.65),side=i%2?1:-1,len=(35+g*70)*(1-i/n*.3),sway=Math.sin(performance.now()/180+i)*w*18;ctx.strokeStyle="#76502b";ctx.lineWidth=Math.max(5,tr*.38);ctx.beginPath();ctx.moveTo(axis*(1+i/n),yy);ctx.quadraticCurveTo(side*len*.5+sway,yy-15,side*len+sway,yy-35);ctx.stroke()}ctx.fillStyle="#3d9b48";for(let i=0;i<8+g*30;i++){const a=i*2.4,r=(20+g*90)*(i%5/5+.25);ctx.beginPath();ctx.arc(axis*1.5+Math.cos(a)*r+Math.sin(performance.now()/250+i)*w*9,-height+Math.sin(a)*r*.55,7+g*7,0,Math.PI*2);ctx.fill()}if(g>.82){ctx.fillStyle="#ff7db1";for(let i=0;i<12;i++){const a=i*.9;ctx.beginPath();ctx.arc(axis*1.5+Math.cos(a)*70,-height+Math.sin(a)*42,6,0,Math.PI*2);ctx.fill()}}ctx.restore()}
-function landmarkPoint(p){const W=innerWidth,H=innerHeight,vw=video.videoWidth||W,vh=video.videoHeight||H,scale=Math.max(W/vw,H/vh),rw=vw*scale,rh=vh*scale;return{x:W-(p.x*rw+(W-rw)/2),y:p.y*rh+(H-rh)/2}}
-function drawSkeleton(){if(!skeleton||test||!currentLandmarks)return;const points=currentLandmarks.map(landmarkPoint);ctx.save();ctx.lineCap="round";ctx.lineJoin="round";ctx.strokeStyle="#38f8ff";ctx.lineWidth=3;ctx.shadowColor="#001d2a";ctx.shadowBlur=4;for(const [a,b] of POSE_CONNECTIONS){ctx.beginPath();ctx.moveTo(points[a].x,points[a].y);ctx.lineTo(points[b].x,points[b].y);ctx.stroke()}for(let i=0;i<points.length;i++){ctx.fillStyle=i<11?"#ffed4a":"#ff4fd8";ctx.beginPath();ctx.arc(points[i].x,points[i].y,4.5,0,Math.PI*2);ctx.fill();ctx.strokeStyle="#17242a";ctx.lineWidth=1.5;ctx.stroke()}const shoulder={x:(points[11].x+points[12].x)/2,y:(points[11].y+points[12].y)/2},hip={x:(points[23].x+points[24].x)/2,y:(points[23].y+points[24].y)/2};ctx.strokeStyle=Math.abs(axis)<=cfg[difficulty].tol?"#7dff63":"#ff704d";ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(shoulder.x,shoulder.y);ctx.lineTo(hip.x,hip.y);ctx.stroke();ctx.shadowBlur=5;ctx.font="800 14px system-ui";ctx.textAlign="center";ctx.fillStyle="#fff";ctx.strokeStyle="#142c32";ctx.lineWidth=4;for(const [label,index,value] of [["LEFT",15,leftHandMotion],["RIGHT",16,rightHandMotion]]){const p=points[index],text=`${label} ${value.toFixed(2)}`;ctx.strokeText(text,p.x,p.y-15);ctx.fillText(text,p.x,p.y-15)}const axisText=`BODY AXIS: ${axis>=0?"+":""}${axis.toFixed(1)}°${Math.abs(axis)<=cfg[difficulty].tol?" ✓":""}`;ctx.strokeText(axisText,shoulder.x,shoulder.y-18);ctx.fillText(axisText,shoulder.x,shoulder.y-18);ctx.restore()}
-function updateSkeletonHud(){if(!skeleton)return;const axisText=`${axis>=0?"+":""}${axis.toFixed(1)}°${Math.abs(axis)<=cfg[difficulty].tol?" ✓":""}`;$("#poseStatus").textContent=`POSE: ${test?"TEST MODE":poseDetected?"DETECTED":"NOT DETECTED"}`;$("#axisStatus").textContent=`BODY AXIS: ${axisText}`;$("#leftStatus").textContent=`LEFT HAND: ${leftHandMotion.toFixed(2)}`;$("#rightStatus").textContent=`RIGHT HAND: ${rightHandMotion.toFixed(2)}`;$("#windStatus").textContent=`WIND: ${wind.toFixed(2)}`;$("#treeStatus").textContent=`TREE GROWTH: ${growth.toFixed(2)}`}
-function render(){const W=innerWidth,H=innerHeight;ctx.clearRect(0,0,W,H);ctx.fillStyle="rgba(255,255,255,.65)";for(let i=0;i<4;i++){const x=(performance.now()/70+i*W/3)%(W+180)-90,y=70+i%2*75;ctx.beginPath();ctx.ellipse(x,y,65,24,0,0,Math.PI*2);ctx.fill()}ctx.fillStyle="#6ab44e";ctx.fillRect(0,H*.88,W,H*.12);tree(growth,wind);ctx.font="28px sans-serif";for(const p of particles)ctx.fillText(p.kind,p.x,p.y);drawSkeleton();updateSkeletonHud()}
-function finish(){running=false;$("#finish").classList.remove("hidden");$("#result").textContent=growth>.8?"🌸✨🌳✨🦋":growth>.5?"🌿🌳🍃":"🌱🌿";if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
-function loop(t){const dt=Math.min(50,t-(lastT||t));lastT=t;if(running){let f=null;if(test){poseDetected=false;currentLandmarks=null;f={axis:+$("#axisSlider").value,left:+$("#leftSlider").value,right:+$("#rightSlider").value,dir:1}}else if(pose&&video.readyState>=2&&video.currentTime!==lastVideo){lastVideo=video.currentTime;const res=pose.detectForVideo(video,t);currentLandmarks=res.landmarks?.[0]||null;poseDetected=!!currentLandmarks;if(currentLandmarks)f=feat(currentLandmarks,dt)}if(f){axis=lerp(axis,f.axis,.25);leftHandMotion=f.left;rightHandMotion=f.right;const hand=clamp((f.left+f.right)/2,0,1),c=cfg[difficulty],stability=clamp(1-Math.abs(axis)/c.tol,0,1);wind=lerp(wind,clamp((hand-.025)/.45,0,1),.14);if(Math.abs(axis)<=c.tol)growth=clamp(growth+dt/30000*(.55+.65*stability),0,1);good=stability>.55&&hand>c.hand?good+dt:0;$("#message").textContent=good>800?"いいかぜ！ ✨":"";updateP(dt,wind,f.dir);const e=(t-startT)/1000,remain=Math.max(0,30-e);$("#timer").textContent=Math.ceil(remain);rows.push({time_ms:Math.round(e*1000),bodyAxisAngle:axis.toFixed(3),bodyStability:stability.toFixed(3),leftHandMotion:f.left.toFixed(4),rightHandMotion:f.right.toFixed(4),handMotion:hand.toFixed(4),windStrength:wind.toFixed(3),treeGrowth:growth.toFixed(3)});$("#metrics").textContent=JSON.stringify({bodyAxisAngle:+axis.toFixed(2),bodyStability:+stability.toFixed(2),leftHandMotion:+f.left.toFixed(3),rightHandMotion:+f.right.toFixed(3),windStrength:+wind.toFixed(2),treeGrowth:+growth.toFixed(2)},null,2);if(remain<=0)finish()}}render();requestAnimationFrame(loop)}
-async function begin(useTest){test=useTest;difficulty=$("#difficulty").value;$("#start").classList.add("hidden");$("#testPanel").classList.toggle("hidden",!test);try{if(!test)await cameraStart()}catch(e){alert("カメラを開始できませんでした。PCテストモードを使えます。\n"+e.message);$("#start").classList.remove("hidden");return}let n=3;$("#message").textContent=n;const id=setInterval(()=>{n--;$("#message").textContent=n?String(n):"スタート！";if(!n){clearInterval(id);setTimeout(()=>$("#message").textContent="",600);growth=wind=axis=0;rows=[];prev=null;lastT=0;startT=performance.now();running=true}},700)}
-$("#startBtn").onclick=()=>begin(false);$("#testBtn").onclick=()=>begin(true);$("#againBtn").onclick=()=>location.reload();$("#skeletonToggle").onclick=()=>{skeleton=!skeleton;$("#skeletonToggle").textContent=`SKELETON ${skeleton?"ON":"OFF"}`;$("#skeletonToggle").setAttribute("aria-pressed",String(skeleton));$("#skeletonHud").classList.toggle("hidden",!skeleton);updateSkeletonHud()};$("#researchToggle").onclick=()=>$("#research").classList.toggle("hidden");$("#csvBtn").onclick=()=>{if(!rows.length)return;const keys=Object.keys(rows[0]),csv=[keys.join(","),...rows.map(r=>keys.map(k=>r[k]).join(","))].join("\n"),a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download="wind-tree-trial.csv";a.click()};requestAnimationFrame(loop);
+import { screenPoint, screenAxis, HandWind, AutumnLeaves } from "./autumn.mjs";
+const $ = (s) => document.querySelector(s),
+  canvas = $("#world"),
+  ctx = canvas.getContext("2d"),
+  video = $("#camera");
+const cfg = {
+  easy: { tol: 10, hand: 0.1 },
+  normal: { tol: 6, hand: 0.14 },
+  hard: { tol: 3, hand: 0.18 },
+};
+let pose,
+  stream,
+  running = false,
+  test = false,
+  lastT = 0,
+  startT = 0,
+  lastVideo = -1,
+  growth = 0,
+  wind = 0,
+  axis = 0,
+  prev,
+  rows = [],
+  particles = [],
+  difficulty = "normal",
+  good = 0;
+let skeleton = false,
+  currentLandmarks = null,
+  poseDetected = false,
+  leftHandMotion = 0,
+  rightHandMotion = 0;
+const POSE_CONNECTIONS = [
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [3, 7],
+  [0, 4],
+  [4, 5],
+  [5, 6],
+  [6, 8],
+  [9, 10],
+  [11, 12],
+  [11, 13],
+  [13, 15],
+  [15, 17],
+  [15, 19],
+  [15, 21],
+  [17, 19],
+  [12, 14],
+  [14, 16],
+  [16, 18],
+  [16, 20],
+  [16, 22],
+  [18, 20],
+  [11, 23],
+  [12, 24],
+  [23, 24],
+  [23, 25],
+  [24, 26],
+  [25, 27],
+  [26, 28],
+  [27, 29],
+  [28, 30],
+  [29, 31],
+  [30, 32],
+  [27, 31],
+  [28, 32],
+];
+const hands = [new HandWind(), new HandWind()];
+const autumn = new AutumnLeaves(innerWidth, innerHeight);
+let lastPoseT = 0,
+  lastInputT = 0;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v)),
+  lerp = (a, b, t) => a + (b - a) * t;
+function resize() {
+  if (typeof autumn !== "undefined") {
+    autumn.resize(innerWidth, innerHeight);
+    hands.forEach((h) => h.reset());
+  }
+  canvas.width = innerWidth * devicePixelRatio;
+  canvas.height = innerHeight * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+addEventListener("resize", resize);
+resize();
+async function initPose() {
+  if (pose) return;
+  const { PoseLandmarker, FilesetResolver } =
+    await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm");
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm",
+  );
+  pose = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+    },
+    runningMode: "VIDEO",
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+    minPosePresenceConfidence: 0.5,
+  });
+}
+async function cameraStart() {
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: {
+      facingMode: "user",
+      width: { ideal: 960 },
+      height: { ideal: 720 },
+    },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await video.play();
+  await initPose();
+}
+function confidence(p) {
+  return p && Number.isFinite(p.x) && Number.isFinite(p.y)
+    ? Math.min(p.visibility ?? 1, p.presence ?? 1)
+    : 0;
+}
+function feat(lm, dt) {
+  const points = lm.map(landmarkPoint),
+    S1 = lm[11],
+    S2 = lm[12],
+    H1 = lm[23],
+    H2 = lm[24];
+  for (const [i, index] of [15, 16].entries())
+    hands[i].update(
+      confidence(lm[index]) >= 0.45 ? points[index] : null,
+      dt / 1000,
+      confidence(lm[index]),
+    );
+  if ([S1, S2, H1, H2].some((p) => confidence(p) < 0.45)) {
+    prev = null;
+    return {
+      axis: null,
+      left: 0,
+      right: 0,
+      dir: Math.sign(hands[0].vx + hands[1].vx) || 1,
+    };
+  }
+  const shoulder = {
+      x: (points[11].x + points[12].x) / 2,
+      y: (points[11].y + points[12].y) / 2,
+    },
+    hip = {
+      x: (points[23].x + points[24].x) / 2,
+      y: (points[23].y + points[24].y) / 2,
+    };
+  // Preserve the existing shoulder-normalized motion metrics for growth/research.
+  const sw = Math.hypot(S1.x - S2.x, S1.y - S2.y) || 0.1;
+  let l = 0,
+    r = 0;
+  if (prev && dt > 0) {
+    const scale = Math.max(0.35, dt / 16.67);
+    for (const [i, index, key] of [
+      [0, 15, "L"],
+      [1, 16, "R"],
+    ]) {
+      const p = lm[index],
+        old = prev[key];
+      if (confidence(p) >= 0.45 && old) {
+        const v = clamp(
+          Math.hypot(p.x - old.x, p.y - old.y) / sw / scale,
+          0,
+          1,
+        );
+        if (i === 0) l = v;
+        else r = v;
+      }
+    }
+  }
+  prev = {
+    L: confidence(lm[15]) >= 0.45 ? { ...lm[15] } : null,
+    R: confidence(lm[16]) >= 0.45 ? { ...lm[16] } : null,
+  };
+  return {
+    axis: screenAxis(shoulder, hip),
+    left: l,
+    right: r,
+    dir: Math.sign(hands[0].vx + hands[1].vx) || 1,
+  };
+}
+function demoInput(dt) {
+  const positions = ["left", "right"].map((side) => ({
+    x: (+$(`#${side}X`).value / 100) * innerWidth,
+    y: (+$(`#${side}Y`).value / 100) * innerHeight,
+  }));
+  positions.forEach((p, i) =>
+    hands[i].update(
+      p,
+      dt / 1000,
+      1,
+      +$(i ? "#rightSlider" : "#leftSlider").value,
+    ),
+  );
+  return {
+    axis: +$("#axisSlider").value,
+    left: +$("#leftSlider").value,
+    right: +$("#rightSlider").value,
+    dir: Math.sign(hands[0].vx + hands[1].vx) || 1,
+  };
+}
+function spawn(kind, s, d) {
+  particles.push({
+    kind,
+    x: d > 0 ? -40 : innerWidth + 40,
+    y: innerHeight * (0.25 + Math.random() * 0.55),
+    vx: (1 + s * 5) * d,
+    vy: -0.3 - Math.random() * 0.5,
+    life: 300,
+  });
+}
+function updateP(dt, s, d) {
+  if (Math.random() < s * 0.12) spawn("🍃", s, d);
+  if (s > 0.4 && Math.random() < 0.018) spawn("🦋", s, d);
+  if (s > 0.72 && Math.random() < 0.012) spawn("🎈", s, d);
+  for (const p of particles) {
+    p.x += (p.vx * dt) / 16;
+    p.y += (p.vy * dt) / 16 - (p.kind === "🎈" ? s * 0.7 : 0);
+    p.life -= dt;
+  }
+  particles = particles.filter(
+    (p) => p.life > 0 && p.x > -100 && p.x < innerWidth + 100 && p.y > -100,
+  );
+}
+function tree(g, w) {
+  const W = innerWidth,
+    H = innerHeight,
+    cx = W / 2,
+    base = H * 0.88,
+    height = 70 + g * Math.min(H * 0.58, 470),
+    tr = 12 + g * 24;
+  ctx.save();
+  ctx.translate(cx, base);
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#654321";
+  ctx.lineWidth = tr;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(axis * 1.1, -height * 0.45, axis * 1.5, -height);
+  ctx.stroke();
+  const n = Math.floor(2 + g * 7);
+  for (let i = 0; i < n; i++) {
+    const yy = -height * (0.3 + (i / (n + 2)) * 0.65),
+      side = i % 2 ? 1 : -1,
+      len = (35 + g * 70) * (1 - (i / n) * 0.3),
+      sway = Math.sin(performance.now() / 180 + i) * w * 18;
+    ctx.strokeStyle = "#76502b";
+    ctx.lineWidth = Math.max(5, tr * 0.38);
+    ctx.beginPath();
+    ctx.moveTo(axis * (1 + i / n), yy);
+    ctx.quadraticCurveTo(
+      side * len * 0.5 + sway,
+      yy - 15,
+      side * len + sway,
+      yy - 35,
+    );
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#3d9b48";
+  for (let i = 0; i < 8 + g * 30; i++) {
+    const a = i * 2.4,
+      r = (20 + g * 90) * ((i % 5) / 5 + 0.25);
+    ctx.beginPath();
+    ctx.arc(
+      axis * 1.5 +
+        Math.cos(a) * r +
+        Math.sin(performance.now() / 250 + i) * w * 9,
+      -height + Math.sin(a) * r * 0.55,
+      7 + g * 7,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+  if (g > 0.82) {
+    ctx.fillStyle = "#ff7db1";
+    for (let i = 0; i < 12; i++) {
+      const a = i * 0.9;
+      ctx.beginPath();
+      ctx.arc(
+        axis * 1.5 + Math.cos(a) * 70,
+        -height + Math.sin(a) * 42,
+        6,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function landmarkPoint(p) {
+  return screenPoint(
+    p,
+    innerWidth,
+    innerHeight,
+    video.videoWidth || innerWidth,
+    video.videoHeight || innerHeight,
+  );
+}
+function drawHandWind() {
+  if (!skeleton) return;
+  ctx.save();
+  for (const [i, h] of hands.entries()) {
+    if (!h.active) continue;
+    ctx.strokeStyle = i ? "#ff4fd8" : "#38f8ff";
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(
+      h.x,
+      h.y,
+      clamp(Math.min(innerWidth, innerHeight) * 0.23, 90, 190),
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+    const ex = h.x + h.vx * 0.12,
+      ey = h.y + h.vy * 0.12,
+      a = Math.atan2(h.vy, h.vx);
+    ctx.beginPath();
+    ctx.moveTo(h.x, h.y);
+    ctx.lineTo(ex, ey);
+    ctx.moveTo(ex - 12 * Math.cos(a - 0.5), ey - 12 * Math.sin(a - 0.5));
+    ctx.lineTo(ex, ey);
+    ctx.lineTo(ex - 12 * Math.cos(a + 0.5), ey - 12 * Math.sin(a + 0.5));
+    ctx.stroke();
+    ctx.font = "bold 13px system-ui";
+    ctx.fillText(
+      `${i ? "RIGHT" : "LEFT"} WIND ${h.strength.toFixed(2)}`,
+      h.x + 10,
+      h.y - 12,
+    );
+  }
+  ctx.restore();
+}
+function drawSkeleton() {
+  if (!skeleton || test || !currentLandmarks) return;
+  const points = currentLandmarks.map(landmarkPoint);
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#38f8ff";
+  ctx.lineWidth = 3;
+  ctx.shadowColor = "#001d2a";
+  ctx.shadowBlur = 4;
+  for (const [a, b] of POSE_CONNECTIONS) {
+    ctx.beginPath();
+    ctx.moveTo(points[a].x, points[a].y);
+    ctx.lineTo(points[b].x, points[b].y);
+    ctx.stroke();
+  }
+  for (let i = 0; i < points.length; i++) {
+    ctx.fillStyle = i < 11 ? "#ffed4a" : "#ff4fd8";
+    ctx.beginPath();
+    ctx.arc(points[i].x, points[i].y, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#17242a";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  const shoulder = {
+      x: (points[11].x + points[12].x) / 2,
+      y: (points[11].y + points[12].y) / 2,
+    },
+    hip = {
+      x: (points[23].x + points[24].x) / 2,
+      y: (points[23].y + points[24].y) / 2,
+    };
+  ctx.strokeStyle =
+    Math.abs(axis) <= cfg[difficulty].tol ? "#7dff63" : "#ff704d";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(shoulder.x, shoulder.y);
+  ctx.lineTo(hip.x, hip.y);
+  ctx.stroke();
+  ctx.shadowBlur = 5;
+  ctx.font = "800 14px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#142c32";
+  ctx.lineWidth = 4;
+  for (const [label, index, value] of [
+    ["LEFT", 15, leftHandMotion],
+    ["RIGHT", 16, rightHandMotion],
+  ]) {
+    const p = points[index],
+      text = `${label} ${value.toFixed(2)}`;
+    ctx.strokeText(text, p.x, p.y - 15);
+    ctx.fillText(text, p.x, p.y - 15);
+  }
+  const axisText = `BODY AXIS: ${axis >= 0 ? "+" : ""}${axis.toFixed(1)}°${Math.abs(axis) <= cfg[difficulty].tol ? " ✓" : ""}`;
+  ctx.strokeText(axisText, shoulder.x, shoulder.y - 18);
+  ctx.fillText(axisText, shoulder.x, shoulder.y - 18);
+  ctx.restore();
+}
+function updateSkeletonHud() {
+  if (!skeleton) return;
+  const axisText = `${axis >= 0 ? "+" : ""}${axis.toFixed(1)}°${Math.abs(axis) <= cfg[difficulty].tol ? " ✓" : ""}`;
+  $("#poseStatus").textContent =
+    `POSE: ${test ? "TEST MODE" : poseDetected ? "DETECTED" : "NOT DETECTED"}`;
+  $("#axisStatus").textContent = `BODY AXIS: ${axisText}`;
+  $("#leftStatus").textContent = `LEFT HAND: ${leftHandMotion.toFixed(2)}`;
+  $("#rightStatus").textContent = `RIGHT HAND: ${rightHandMotion.toFixed(2)}`;
+  $("#windStatus").textContent = `WIND: ${wind.toFixed(2)}`;
+  $("#treeStatus").textContent = `TREE GROWTH: ${growth.toFixed(2)}`;
+}
+function render() {
+  const W = innerWidth,
+    H = innerHeight;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(255,255,255,.65)";
+  for (let i = 0; i < 4; i++) {
+    const x = ((performance.now() / 70 + (i * W) / 3) % (W + 180)) - 90,
+      y = 70 + (i % 2) * 75;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 65, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillStyle = "#6ab44e";
+  ctx.fillRect(0, H * 0.88, W, H * 0.12);
+  tree(growth, wind);
+  ctx.font = "28px sans-serif";
+  for (const p of particles) ctx.fillText(p.kind, p.x, p.y);
+  autumn.draw(ctx);
+  drawSkeleton();
+  drawHandWind();
+  updateSkeletonHud();
+}
+function finish() {
+  running = false;
+  $("#finish").classList.remove("hidden");
+  $("#result").textContent =
+    growth > 0.8 ? "🌸✨🌳✨🦋" : growth > 0.5 ? "🌿🌳🍃" : "🌱🌿";
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+}
+function loop(t) {
+  const rawDt = lastT ? t - lastT : 0,
+    dt = Math.min(250, rawDt);
+  lastT = t;
+  if (running) {
+    let f = null;
+    if (test) {
+      poseDetected = false;
+      currentLandmarks = null;
+      f = demoInput(dt);
+    } else if (
+      pose &&
+      video.readyState >= 2 &&
+      video.currentTime !== lastVideo
+    ) {
+      lastVideo = video.currentTime;
+      try {
+        const res = pose.detectForVideo(video, t);
+        currentLandmarks = res.landmarks?.[0] || null;
+        poseDetected = !!currentLandmarks;
+        const poseDt = lastPoseT ? t - lastPoseT : 0;
+        lastPoseT = t;
+        if (currentLandmarks) f = feat(currentLandmarks, poseDt);
+        else {
+          hands.forEach((h) => h.update(null, dt / 1000));
+          prev = null;
+        }
+      } catch (e) {
+        currentLandmarks = null;
+        poseDetected = false;
+        hands.forEach((h) => h.update(null, dt / 1000));
+        prev = null;
+      }
+    }
+    if (f) {
+      if (f.axis !== null) {
+        axis = lerp(axis, f.axis, 1 - Math.exp(-dt / 100));
+        lastInputT = t;
+      }
+      leftHandMotion = f.left;
+      rightHandMotion = f.right;
+    }
+    if (!test && t - lastInputT > 250) {
+      axis *= Math.exp(-dt / 250);
+      leftHandMotion *= Math.exp(-dt / 120);
+      rightHandMotion *= Math.exp(-dt / 120);
+    }
+    if (!test && t - lastPoseT > 250) {
+      poseDetected = false;
+      currentLandmarks = null;
+      prev = null;
+      hands.forEach((h) => h.update(null, dt / 1000));
+    }
+    const hand = clamp((leftHandMotion + rightHandMotion) / 2, 0, 1),
+      c = cfg[difficulty],
+      stability = clamp(1 - Math.abs(axis) / c.tol, 0, 1);
+    wind = lerp(
+      wind,
+      clamp((hand - 0.025) / 0.45, 0, 1),
+      1 - Math.exp(-dt / 110),
+    );
+    if ((test || t - lastInputT <= 250) && Math.abs(axis) <= c.tol)
+      growth = clamp(growth + (dt / 30000) * (0.55 + 0.65 * stability), 0, 1);
+    good = stability > 0.55 && hand > c.hand ? good + dt : 0;
+    $("#message").textContent = good > 800 ? "いいかぜ！ ✨" : "";
+    const remain = Math.max(0, 30 - (t - startT) / 1000),
+      activeDt = Math.min(dt, Math.max(0, 30000 - (t - dt - startT)));
+    updateP(activeDt, wind, f?.dir || 1);
+    autumn.update(activeDt / 1000, axis, hands);
+    $("#timer").textContent = Math.ceil(remain);
+    const metrics = {
+      bodyAxisAngle: +axis.toFixed(2),
+      bodyStability: +stability.toFixed(2),
+      leftHandMotion: +leftHandMotion.toFixed(3),
+      rightHandMotion: +rightHandMotion.toFixed(3),
+      windStrength: +wind.toFixed(2),
+      treeGrowth: +growth.toFixed(2),
+      bodyAxisWind: +autumn.bodyWind.toFixed(2),
+      leftHandWind: +hands[0].strength.toFixed(3),
+      rightHandWind: +hands[1].strength.toFixed(3),
+      leafCount: autumn.leaves.length,
+    };
+    rows.push({
+      time_ms: Math.round(t - startT),
+      bodyAxisAngle: axis.toFixed(3),
+      bodyStability: stability.toFixed(3),
+      leftHandMotion: leftHandMotion.toFixed(4),
+      rightHandMotion: rightHandMotion.toFixed(4),
+      handMotion: hand.toFixed(4),
+      windStrength: wind.toFixed(3),
+      treeGrowth: growth.toFixed(3),
+      bodyAxisWind: autumn.bodyWind.toFixed(3),
+      leftHandWind: hands[0].strength.toFixed(4),
+      rightHandWind: hands[1].strength.toFixed(4),
+      leafCount: autumn.leaves.length,
+    });
+    $("#metrics").textContent = JSON.stringify(metrics, null, 2);
+    if (remain <= 0) finish();
+  }
+  render();
+  requestAnimationFrame(loop);
+}
+async function begin(useTest) {
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    stream = null;
+  }
+  test = useTest;
+  difficulty = $("#difficulty").value;
+  $("#start").classList.add("hidden");
+  $("#testPanel").classList.toggle("hidden", !test);
+  try {
+    if (!test) await cameraStart();
+  } catch (e) {
+    if (stream) {
+      stream.getTracks().forEach((t) => t.stop());
+      stream = null;
+    }
+    alert(
+      "カメラを開始できませんでした。PCテストモードを使えます。\n" + e.message,
+    );
+    $("#start").classList.remove("hidden");
+    return;
+  }
+  let n = 3;
+  $("#message").textContent = n;
+  const id = setInterval(() => {
+    n--;
+    $("#message").textContent = n ? String(n) : "スタート！";
+    if (!n) {
+      clearInterval(id);
+      setTimeout(() => ($("#message").textContent = ""), 600);
+      growth = wind = axis = 0;
+      good = 0;
+      particles = [];
+      rows = [];
+      prev = null;
+      currentLandmarks = null;
+      poseDetected = false;
+      leftHandMotion = rightHandMotion = 0;
+      hands.forEach((h) => h.reset());
+      autumn.reset();
+      lastVideo = -1;
+      lastPoseT = 0;
+      lastT = 0;
+      startT = performance.now();
+      lastInputT = startT;
+      running = true;
+    }
+  }, 700);
+}
+$("#startBtn").onclick = () => begin(false);
+$("#testBtn").onclick = () => begin(true);
+$("#againBtn").onclick = () => location.reload();
+$("#skeletonToggle").onclick = () => {
+  skeleton = !skeleton;
+  $("#skeletonToggle").textContent = `SKELETON ${skeleton ? "ON" : "OFF"}`;
+  $("#skeletonToggle").setAttribute("aria-pressed", String(skeleton));
+  $("#skeletonHud").classList.toggle("hidden", !skeleton);
+  updateSkeletonHud();
+};
+$("#researchToggle").onclick = () => $("#research").classList.toggle("hidden");
+$("#csvBtn").onclick = () => {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]),
+    csv = [
+      keys.join(","),
+      ...rows.map((r) => keys.map((k) => r[k]).join(",")),
+    ].join("\n"),
+    a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = "wind-tree-trial.csv";
+  a.click();
+};
+requestAnimationFrame(loop);
+
+let draggedHand = null;
+canvas.addEventListener("pointerdown", (e) => {
+  if (!test || !running) return;
+  const distances = hands.map((h) =>
+    Math.hypot(h.x - e.clientX, h.y - e.clientY),
+  );
+  draggedHand = distances[0] < distances[1] ? 0 : 1;
+  canvas.setPointerCapture(e.pointerId);
+  moveDemoHand(e);
+});
+function moveDemoHand(e) {
+  if (draggedHand === null) return;
+  const side = draggedHand ? "right" : "left";
+  $(`#${side}X`).value = clamp((e.clientX / innerWidth) * 100, 0, 100);
+  $(`#${side}Y`).value = clamp((e.clientY / innerHeight) * 100, 0, 100);
+}
+canvas.addEventListener("pointermove", moveDemoHand);
+for (const name of ["pointerup", "pointercancel"])
+  canvas.addEventListener(name, () => (draggedHand = null));
