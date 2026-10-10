@@ -42,8 +42,9 @@ export class TrialClock {
     this.lastNow = now;
   }
   tick(now) {
-    let delta = this.lastNow === null ? 0 : Math.max(0, now - this.lastNow);
-    this.lastNow = now;
+    const current = Math.max(now, this.lastNow ?? now);
+    let delta = this.lastNow === null ? 0 : current - this.lastNow;
+    this.lastNow = current;
     let finishedNow = false;
     if (!this.paused && this.phase === "countdown") {
       const used = Math.min(delta, 3000 - this.countdownMs);
