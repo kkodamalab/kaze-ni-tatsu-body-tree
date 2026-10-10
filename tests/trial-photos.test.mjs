@@ -214,3 +214,16 @@ test("zero threshold still requires a face, hold time and cooldown", () => {
   for (let t = 0; t <= 5000; t += 125) shots += Number(gate.update(0, t, true));
   assert.equal(shots, 3);
 });
+test("mixed RAF/timer timestamps never rewind the clock or count time twice", () => {
+  const clock = new TrialClock();
+  clock.start(0, 1);
+  clock.tick(1000);
+  clock.tick(990);
+  clock.tick(2000);
+  assert.equal(clock.countdownMs, 2000);
+  clock.tick(3000);
+  clock.tick(3500);
+  clock.tick(3490);
+  assert.equal(clock.tick(4000).elapsedMs, 1000);
+  assert.equal(clock.phase, "finished");
+});

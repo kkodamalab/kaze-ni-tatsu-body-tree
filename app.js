@@ -558,6 +558,7 @@ function finish() {
     activePlayTimeSec: clock.elapsedMs / 1000,
     sensitivities: { ...sensitivities },
   };
+  $("#testPanel").classList.add("hidden");
   $("#finish").classList.remove("hidden");
   $("#result").textContent =
     growth > 0.8 ? "🌸✨🌳✨🦋" : growth > 0.5 ? "🌿🌳🍃" : "🌱🌿";
