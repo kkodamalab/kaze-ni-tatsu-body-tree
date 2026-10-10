@@ -95,7 +95,10 @@ try {
   assert.equal((await state()).clock.elapsedMs, 1000);
   await page.clock.fastForward(5000);
   assert.equal((await state()).finishCount, 1);
+  await page.setViewportSize({ width: 400, height: 850 });
+  assert.equal(await page.locator("#testPanel").isVisible(), false);
   await replay();
+  await page.setViewportSize({ width: 1000, height: 900 });
   await page.evaluate(() => (window.simulateDenied = true));
   await page.click("#startBtn");
   assert.equal((await state()).clock.phase, "idle");
