@@ -18,6 +18,8 @@
         </div>
         <div id="timer">30</div>
       </div>
+      <div id="photoStatus" role="status">撮影は同意確認後に有効になります</div>
+      <button id="stopPhotoBtn" class="hidden">撮影を止める</button>
       <button id="skeletonToggle" aria-pressed="false">SKELETON OFF</button>
       <section id="skeletonHud" class="hidden" aria-live="polite">
         <b id="poseStatus">POSE: NOT DETECTED</b
@@ -25,7 +27,9 @@
         ><span id="leftStatus">LEFT HAND: 0.00</span
         ><span id="rightStatus">RIGHT HAND: 0.00</span
         ><span id="windStatus">WIND: 0.00</span
-        ><span id="treeStatus">TREE GROWTH: 0.00</span>
+        ><span id="treeStatus">TREE GROWTH: 0.00</span
+        ><span id="gainStatus"></span><span id="leafVelocityStatus"></span
+        ><span id="windVectorStatus"></span>
       </section>
       <section id="start" class="panel">
         <h1>🌳 風の木になろう！</h1>
@@ -33,6 +37,86 @@
           からだを かたむけると はっぱが ゆらゆら！<br />てを ふると はっぱが
           ひらひら！
         </p>
+        <fieldset class="settings">
+          <legend>あそびの設定</legend>
+          <label for="durationRange">プレイ時間</label>
+          <div class="durationInputs">
+            <input
+              id="durationRange"
+              type="range"
+              min="1"
+              max="60"
+              step="1"
+              value="30"
+            /><input
+              id="durationNumber"
+              type="number"
+              min="1"
+              max="60"
+              step="1"
+              value="30"
+              aria-label="プレイ時間（秒）"
+            /><span>秒</span>
+          </div>
+          <p id="durationError" class="settingError" role="alert"></p>
+          <label
+            >落ち葉の感度：からだ <output id="bodySensitivityValue">70%</output
+            ><input
+              id="bodySensitivity"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="70"
+          /></label>
+          <label
+            >落ち葉の感度：左手 <output id="leftSensitivityValue">70%</output
+            ><input
+              id="leftSensitivity"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="70"
+          /></label>
+          <label
+            >落ち葉の感度：右手 <output id="rightSensitivityValue">70%</output
+            ><input
+              id="rightSensitivity"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="70"
+          /></label>
+        </fieldset>
+        <fieldset class="settings">
+          <legend>笑顔の写真</legend>
+          <label
+            ><input id="smileEnabled" type="checkbox" checked />
+            笑顔撮影ON</label
+          >
+          <label
+            >笑顔の閾値 <output id="smileThresholdValue">60%</output
+            ><input
+              id="smileThreshold"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value="60"
+          /></label>
+          <p class="hint">
+            閾値は笑顔推定スコアの基準です。笑顔の確率や正解率ではありません。写真はこのブラウザのメモリだけに保持し、自動送信・保存はしません。
+          </p>
+          <label class="consent"
+            ><input id="photoConsent" type="checkbox" />
+            保護者・スタッフが本人・保護者の撮影同意を確認しました（今回の参加者）</label
+          >
+          <p class="hint">
+            同意がなければ撮影OFFで遊べます。PCテストモードでは撮影しません。別のタブに移ると一時停止します。
+          </p>
+        </fieldset>
         <label
           >むずかしさ
           <select id="difficulty">
@@ -42,6 +126,7 @@
           </select></label
         ><button id="startBtn">カメラをつかって はじめる</button
         ><button id="testBtn" class="secondary">PC テストモード</button>
+        <p id="startStatus" class="settingError" role="status"></p>
         <p class="hint">からだ全体が見える場所に立ってね</p>
       </section>
       <section id="testPanel" class="dev hidden">
@@ -117,8 +202,24 @@
       <section id="finish" class="panel hidden">
         <h1>🌳 おおきな きに なったね！</h1>
         <div id="result"></div>
+        <h2>撮影した写真</h2>
+        <p id="noPhotos">今回は写真がありません</p>
+        <div id="photoGrid" class="photoGrid"></div>
+        <div class="photoActions">
+          <button id="savePhotoBtn" disabled>写真を保存</button
+          ><button id="deletePhotoBtn" disabled>写真を削除</button>
+        </div>
         <button id="againBtn">もういっかい</button>
+        <p class="hint">
+          次の参加者に交代すると、この試行の写真は消去されます。
+        </p>
       </section>
+      <dialog id="photoDialog">
+        <img id="photoPreview" alt="撮影した写真の拡大" />
+        <p id="photoCaption"></p>
+        <button id="choosePhotoBtn">PHOTO GIFTに選ぶ</button
+        ><button id="closePhotoBtn">閉じる</button>
+      </dialog>
       <div id="message"></div>
     </div>
     <script type="module" src="app.js"></script>

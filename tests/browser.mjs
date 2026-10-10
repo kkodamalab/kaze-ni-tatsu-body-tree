@@ -51,7 +51,7 @@ try {
   assert.ok(extracted.hands[0].vx > 0);
   assert.equal(extracted.hands[1].active, false);
   await page.click("#testBtn");
-  await page.clock.runFor(2300);
+  await page.clock.runFor(3300);
   assert.equal(await page.evaluate(() => checkGame.state.running), true);
   await page.locator("#axisSlider").fill("15");
   await page.clock.runFor(1000);
@@ -129,12 +129,17 @@ try {
     "leftHandWind",
     "rightHandWind",
     "leafCount",
+    "configuredDurationSec",
+    "activePlayTimeSec",
+    "bodySensitivityPercent",
+    "leftSensitivityPercent",
+    "rightSensitivityPercent",
   ])
     assert.ok(cols.includes(col));
   assert.ok(csv.split("\n").length > 100);
   await page.click("#againBtn");
   await page.click("#testBtn");
-  await page.clock.runFor(2300);
+  await page.clock.runFor(3300);
   assert.equal(await page.evaluate(() => checkGame.state.running), true);
   assert.ok((await page.evaluate(() => checkGame.state.growth)) < 0.05);
   assert.deepEqual(errors, []);

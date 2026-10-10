@@ -102,12 +102,12 @@ export class AutumnLeaves {
     this.width = width;
     this.height = height;
   }
-  update(seconds, axis, hands = []) {
+  update(seconds, axis, hands = [], gains = { body: 1, left: 1, right: 1 }) {
     const elapsed = clamp(seconds, 0, 0.25);
     const target =
       Math.abs(axis) <= 1.5 ? 0 : Math.sign(axis) * (Math.abs(axis) - 1.5) * 13;
     this.bodyWind +=
-      (clamp(target, -250, 250) - this.bodyWind) *
+      (clamp(target * gains.body, -500, 500) - this.bodyWind) *
       (1 - Math.exp(-elapsed / 0.22));
     // Substeps keep drag and local forces stable when the frame rate falls.
     const steps = Math.max(1, Math.ceil(elapsed / (1 / 60))),
@@ -124,11 +124,13 @@ export class AutumnLeaves {
             p.vx) *
           2;
         let ay = 85 - p.vy * (85 / p.fall);
-        for (const hand of hands)
+        for (const [index, hand] of hands.entries())
           if (hand.active) {
             const distance = Math.hypot(p.x - hand.x, p.y - hand.y);
             if (distance < radius) {
-              const weight = (1 - distance / radius) ** 2;
+              const weight =
+                (1 - distance / radius) ** 2 *
+                (index === 0 ? gains.left : gains.right);
               ax += hand.vx * weight * 7;
               ay += hand.vy * weight * 7;
             }
