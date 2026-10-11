@@ -95,7 +95,7 @@ Three.js 0.183.2をMITライセンス付きで `vendor/three/` に固定して�
   気象風ゲイン100%は1m/sを1空間単位/sの目標速度へ変換する視覚化用スケールです。
 - **CAMERA ON** は既存ゲームの同じカメラ開始・Pose初期化処理を借用します。
   既存Poseインスタンスを再利用し、画面同士でカメラ・推論・描画ループを重複起動しません。
-  LabではFaceモデル・撮影を起動しません。**SKELETON ON** は小窓に鏡像の骨格を重ねます。
+  DOTではFaceモデル・撮影を起動しません。KIDS/ARTの撮影は下記の同意付きプレイで有効にします。**SKELETON ON** は小窓に鏡像の骨格を重ねます。
 - 身体風は肩中心と腰中心から、鏡像表示の左右傾斜、胴体の画像上の伸縮、推定奥行き差を計算します。
   Yは伸縮の目安であり、厳密な鉛直姿勢・前後移動の測定ではありません。
   worldLandmarksがあればZに優先利用しますが、単眼推定は不安定なため範囲を制限します。
@@ -133,3 +133,52 @@ API仕様はOpen-Meteo公式リポジトリの [OpenAPI](https://github.com/open
 自動テストは生成カメラ／合成Poseの身体入力、実モデルの初期化と生成映像への推論、PC TEST、
 GPS拒否、API成功・失敗、8000粒子の履歴制限、カメラ共有と解放、390px幅のUIを検証します。
 iPhone/iPad/Android/Windowsの実機、実人物の追跡精度、奥行きと体感方向、実GPS許可、端末別FPSは別途確認が必要です。
+
+
+## 3D WIND LAB — Phase 3–4
+
+DISPLAY MODEのDOT（初期）/ KIDS / ARTは同じWindEngineの位置・速度・入力を描画します。
+モード切替では物理エンジン・カメラ・Poseモデルを作り直しません。
+KIDSは明るい空・雲・地面、4色の大きな秋の葉、枝と葉が育つ木です。
+ARTは暗い空間、加算合成の光粒子・軌跡、色のゆっくりした変化、奥行きの霧、細い光の木です。
+重いBloomや独自の葉・渦の物理は使用せず、手による流線変化も共通HandWindだけで決まります。
+
+KIDS/ARTのSTARTは粒子・成長・時間を新しいプレイにリセットします。
+時間は既存トップの1〜60秒設定を引き継ぎ、プレイ画面でも変更できます。
+共通GrowthSessionが正常な入力の継続時間を積算し、設定時間で割った0〜1を両モードの木へ渡します。
+静止中も有効入力として成長します。Pose欠損・動画停止は750msの猶予後に停止し、復帰時に再開します。
+PAUSEとタブ非表示の時間は除外します。DOTへ移動中は成長・撮影を一時停止し、KIDS/ARTへ戻ると再開します。
+KIDS↔ARTでは時間・成長・写真を共有します。終了後は成長した木を保持します。
+「もういっかい」「RESET / 次の参加者」で写真・選択・撮影同意・成長を消去します。
+
+主な感度・気象ON/OFFとプレイ設定を表示し、詳細設定を折りたたみます。KIDSにはDEBUGを表示しません。
+DOTのDEBUGでは33点の検出数、身体XYZ、左右手XYZ/速度/局所風、4風成分、Pose推論FPSと描画FPSを確認できます。
+SKELETONは33点と接続線をカメラ映像に合わせて鏡像表示します。
+将来の傾きセンサは `lab.acceptInput({body:[x,y,z],left:null,right:null}, performance.now(), "sensor")`
+の同じ入力経路へ接続できます。今回センサを起動せず、片足立ち判定も行いません。
+
+カメラON・笑顔撮影ON・参加者ごとの同意を確認してSTARTすると、既存FaceCapture/SmileGateを起動します。
+閾値・200ms保持・2秒クールダウン・最大10枚・品質入替は従来仕様です。
+写真はカメラ小窓と同じ全体範囲の鏡像JPEGで、終了後に一覧・拡大・選択・保存・削除できます。
+撮影OFF/同意なし/PC TESTでは写真なしで正常に終了します。カメラOFFやモデルエラーでは撮影だけを停止します。
+PHOTO GIFTの既存 `window.windTreePhotoGift.getSelectedGift()` はLabにも対応し、結果に
+`displayMode`, `growth`, `configuredDurationSec`, `validElapsedTimeSec` を含めます。QR転送はありません。
+CSVは成長・有効時間・入力状態・モード・4風ベクトルを記録し、最大6000行でメモリを制限します。
+
+描画リソースはモード切替でGeometry/Texture、背景のGeometry/Materialを解放します。
+履歴最大10万線分は維持し、遅いフレームが続けば画素密度・軌跡時間・ART光粒子サイズを減らします。
+物理の粒子総数を勝手に変更しません。退出時は写真URL、Face worker、成長タイマーも解放します。
+設定の保存対象は引き続きWindConfigのみで、表示モードは毎回DOT、同意・写真・位置・ランドマークは保存しません。
+
+```sh
+npm test
+npm run build
+PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/pose-lab-browser.mjs
+PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/modes-play-browser.mjs
+```
+
+単体テスト38件。ブラウザ回帰は既存ゲーム、設定/PHOTO、DOT、合成33点Pose、KIDS/ARTの5スイートです。
+合成PoseでBODY ONLY/LEFT HAND ONLY/RIGHT HAND ONLY/ALL ONと単一モデルを検証し、
+生成カメラと合成Face結果で笑顔撮影・写真操作・同意・参加者交代・入力喪失/復帰を検証します。
+8000粒子の3モード、繰り返し切替でのGPUテクスチャ解放、390px幅の操作も確認します。
+実人物のPose/笑顔、実GPS、Windows/Edge・iPhone/iPad/Safari・Android実機と端末別FPSは未検証です。

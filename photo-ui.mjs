@@ -1,9 +1,10 @@
 export class PhotoUI {
-  constructor(session, root = document) {
+  constructor(session, root = document, { prefix = "" } = {}) {
     this.session = session;
     this.root = root;
+    this.document = root.ownerDocument || root;
     this.previewId = null;
-    const get = (id) => root.querySelector(`#${id}`);
+    const get = (id) => root.querySelector(`#${prefix}${id}`);
     this.grid = get("photoGrid");
     this.empty = get("noPhotos");
     this.dialog = get("photoDialog");
@@ -20,7 +21,7 @@ export class PhotoUI {
     this.save.onclick = () => {
       const p = session.photos.find((p) => p.id === session.selectedId);
       if (!p) return;
-      const a = root.createElement("a");
+      const a = this.document.createElement("a");
       a.href = p.url;
       a.download = `wind-tree-${session.trialId}-${p.id}.jpg`;
       a.click();
@@ -40,7 +41,7 @@ export class PhotoUI {
     this.empty.hidden = this.session.photos.length > 0;
     this.save.disabled = this.remove.disabled = !this.session.selectedId;
     for (const photo of this.session.photos) {
-      const button = this.root.createElement("button");
+      const button = this.document.createElement("button");
       button.type = "button";
       button.className = "photoThumb";
       button.setAttribute(
@@ -51,11 +52,11 @@ export class PhotoUI {
         "aria-pressed",
         String(photo.id === this.session.selectedId),
       );
-      const image = this.root.createElement("img");
+      const image = this.document.createElement("img");
       image.src = photo.url;
       image.alt = "撮影した写真";
       image.loading = "lazy";
-      const caption = this.root.createElement("span");
+      const caption = this.document.createElement("span");
       caption.textContent = `${photo.elapsedSec.toFixed(1)}秒 / ${Math.round(photo.smileScore * 100)}%${photo.id === this.session.selectedId ? " ✓ PHOTO GIFT" : ""}`;
       button.append(image, caption);
       button.onclick = () => {

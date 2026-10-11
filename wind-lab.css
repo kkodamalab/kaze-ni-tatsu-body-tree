@@ -211,3 +211,104 @@
     font-size: 19px;
   }
 }
+/* Display adapters keep the same engine and camera. */
+.lab-stage {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+.lab-details,
+.lab-play {
+  grid-column: 2;
+  min-width: 0;
+}
+.lab-details {
+  align-self: start;
+}
+.lab-details summary {
+  cursor: pointer;
+  padding: 12px;
+}
+.lab-play {
+  padding: 16px;
+}
+.lab-play label {
+  display: block;
+  margin: 10px 0;
+}
+.lab-play input[type="range"] {
+  display: block;
+  width: 100%;
+}
+.lab-play input[type="number"] {
+  width: 75px;
+}
+.lab-play p {
+  font-size: 13px;
+}
+.lab-growth-hud {
+  position: absolute;
+  left: 15px;
+  top: 15px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #07111caa;
+  color: white;
+  pointer-events: none;
+  max-width: 50%;
+}
+.lab-growth-hud strong {
+  font-size: 30px;
+}
+.lab-growth-hud progress,
+.lab-growth-hud span:last-child {
+  display: block;
+  width: 100%;
+}
+#windLab [hidden] {
+  display: none !important;
+}
+#windLab[data-display-mode="KIDS"] {
+  background: #e9f5dd;
+  color: #39533b;
+}
+#windLab[data-display-mode="KIDS"] button {
+  background: #f5df9d;
+  color: #423924;
+  border-color: #b79a58;
+}
+#windLab[data-display-mode="KIDS"] .lab-debug,
+#windLab[data-display-mode="KIDS"] .lab-caption {
+  display: none;
+}
+#windLab[data-display-mode="ART"] .lab-header {
+  background: #030818;
+}
+#windLab[data-display-mode="ART"] .lab-caption {
+  display: none;
+}
+#lab-photoDialog {
+  max-width: min(90vw, 760px);
+}
+#lab-photoPreview {
+  max-width: 100%;
+  max-height: 65vh;
+}
+@media (max-width: 760px) {
+  .lab-layout {
+    display: flex;
+    flex-direction: column;
+  }
+  .lab-stage {
+    position: relative;
+    height: 55vh;
+    min-height: 320px;
+  }
+  .lab-play,
+  .lab-details {
+    width: 100%;
+  }
+  .lab-growth-hud {
+    max-width: 45%;
+    font-size: 12px;
+  }
+}
