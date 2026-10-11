@@ -1,0 +1,9 @@
+{
+  "name": "kaze-ni-tatsu-body-tree",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "build": "node scripts/check-static.mjs"
+  }
+}

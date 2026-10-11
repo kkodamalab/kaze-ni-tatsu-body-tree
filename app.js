@@ -623,7 +623,12 @@ function handleVisibility() {
 document.addEventListener("visibilitychange", handleVisibility);
 // The clock is independent of video frames and inference. Hidden time is excluded.
 setInterval(() => syncClock(performance.now()), 100);
+let gameFrame,
+  labActive = false,
+  labInstance = null,
+  labOpening = false;
 function loop(t) {
+  if (labActive) return;
   const state = syncClock(t),
     dt = Math.min(250, Math.max(0, state.elapsedMs - lastSimulationMs));
   lastSimulationMs = state.elapsedMs;
@@ -719,7 +724,7 @@ function loop(t) {
     $("#metrics").textContent = JSON.stringify(metrics, null, 2);
   }
   render();
-  requestAnimationFrame(loop);
+  gameFrame = requestAnimationFrame(loop);
 }
 function resetTrial() {
   trialGeneration++;
@@ -756,7 +761,15 @@ function resetTrial() {
   $("#photoStatus").textContent = "撮影は同意確認後に有効になります";
 }
 async function begin(useTest) {
-  if (starting || running || clock.phase === "countdown") return;
+  if (
+    labActive ||
+    labOpening ||
+    labCameraBusy ||
+    starting ||
+    running ||
+    clock.phase === "countdown"
+  )
+    return;
   const duration = validDuration($("#durationNumber").value);
   if (duration === null) {
     $("#durationError").textContent = "1〜60秒の整数を入力してください";
@@ -852,7 +865,7 @@ window.addEventListener("pagehide", () => {
   pose?.close();
   pose = null;
 });
-requestAnimationFrame(loop);
+gameFrame = requestAnimationFrame(loop);
 
 let draggedHand = null;
 canvas.addEventListener("pointerdown", (e) => {
@@ -873,3 +886,66 @@ function moveDemoHand(e) {
 canvas.addEventListener("pointermove", moveDemoHand);
 for (const name of ["pointerup", "pointercancel"])
   canvas.addEventListener(name, () => (draggedHand = null));
+
+// The Lab borrows this game's camera and single Pose instance. No second model.
+let labCameraBusy = false,
+  exitLab = () => {};
+$("#windLabBtn").onclick = async () => {
+  if (labActive || labOpening || starting || running) return;
+  labOpening = true;
+  try {
+    const { WindLab } = await import("./wind-lab.js");
+    resetTrial();
+    labActive = true;
+    cancelAnimationFrame(gameFrame);
+    $("#app").classList.add("hidden");
+    $("#windLab").classList.remove("hidden");
+    const exit = () => {
+      if (!labActive) return;
+      labInstance?.dispose();
+      labInstance = null;
+      $("#app").prepend(video);
+      $("#app").classList.remove("hidden");
+      $("#windLab").classList.add("hidden");
+      labActive = false;
+      gameFrame = requestAnimationFrame(loop);
+      $("#windLabBtn").focus();
+    };
+    exitLab = exit;
+    labInstance = new WindLab({
+      root: $("#windLab"),
+      video,
+      onExit: exit,
+      camera: {
+        async start() {
+          if (labCameraBusy) throw new Error("camera initialization pending");
+          labCameraBusy = true;
+          try {
+            await cameraStart();
+          } finally {
+            labCameraBusy = false;
+          }
+        },
+        stop: stopCamera,
+        detect: (t) => pose?.detectForVideo(video, t),
+        release() {
+          if (!labCameraBusy) {
+            pose?.close();
+            pose = null;
+          }
+        },
+      },
+    });
+  } catch (e) {
+    labInstance?.dispose();
+    $("#app").prepend(video);
+    $("#app").classList.remove("hidden");
+    $("#windLab").classList.add("hidden");
+    if (labActive) gameFrame = requestAnimationFrame(loop);
+    labActive = false;
+    $("#startStatus").textContent = "3D WIND LABを開始できませんでした。";
+  } finally {
+    labOpening = false;
+  }
+};
+window.addEventListener("pagehide", () => exitLab());
