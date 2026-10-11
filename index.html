@@ -8,6 +8,7 @@
     />
     <title>風の木になろう！</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="wind-lab.css" />
   </head>
   <body>
     <div id="app">
@@ -126,6 +127,7 @@
           </select></label
         ><button id="startBtn">カメラをつかって はじめる</button
         ><button id="testBtn" class="secondary">PC テストモード</button>
+        <button id="windLabBtn" class="secondary">3D WIND LAB</button>
         <p id="startStatus" class="settingError" role="status"></p>
         <p class="hint">からだ全体が見える場所に立ってね</p>
       </section>
@@ -222,6 +224,7 @@
       </dialog>
       <div id="message"></div>
     </div>
+    <section id="windLab" class="hidden" aria-label="3D WIND LAB"></section>
     <script type="module" src="app.js"></script>
   </body>
 </html>

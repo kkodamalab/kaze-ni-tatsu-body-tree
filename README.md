@@ -11,11 +11,13 @@
 - カメラなしのPC Test mode
 
 ## 公開
+
 このフォルダの中身をGitHubリポジトリのルートへアップロードし、Settings → Pages → Deploy from a branch → main / root を選択してください。
 
 カメラはHTTPSまたはlocalhostでのみ利用できます。
 
 ## 注意
+
 初版MVPです。iPhone Safari / Android Chromeで、カメラ画角・左右反転・MediaPipeの実効FPS・屋外逆光条件を実機調整してください。
 
 ## 開発・秋の落ち葉
@@ -70,3 +72,64 @@ PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index
 ```
 
 写真UIテストには合成カメラ・合成推論結果を使用します。実機での笑顔判定精度、左右非対称の顔・照明条件、端末性能、iPhone/Androidの撮影・保存操作は別途検証が必要です。
+
+## 3D WIND LAB — Phase 1–2
+
+トップ画面の **3D WIND LAB** から、従来ゲームとは独立した実験画面を開きます。
+初期は **PC TEST ON / SIMULATED WIND**。カメラ・GPS・CDNなしで使えます。
+Three.js 0.183.2をMITライセンス付きで `vendor/three/` に固定して同梱しています。
+ビルド不要の静的配信を維持し、`npm run build` は配信ファイル・ローカルimport参照・構文を検査します。
+
+- 格子は各軸3〜20、計27〜8000点。Points + BufferGeometryを更新し、毎フレーム再生成しません。
+- ドットサイズ1〜10、速度0〜300%、本体と軌跡の独立表示、格子・視点RESET、OrbitControlsで回転／ズーム。
+- 軌跡は各粒子の過去位置を0.1秒以上の間隔で記録。履歴は最大51点、全体で最大10万線分に制限します。
+  8000点の場合は13履歴点で5秒をカバーするよう間隔を広げます。WRAPを跨ぐ線分は描画しません。
+- `+X = 東（右） / +Y = 上 / -Z = 北（奥）`。気象学的なFROM方位をTOへ変換します。
+  北風0°は+Zへ、東風90°は-Xへ、南風180°は-Zへ、西風270°は+Xへ流れます。
+  方位は地理的な座標軸の定義で、端末コンパスや実際のカメラの向きへの自動追従はしません。
+- **現在地の風を取得**を押したときだけGeolocationの許可を要求します。
+  **MANUAL LOCATION** は緯度経度入力。初期値35.61,139.38は南大沢周辺のデモ地点で、現在地を示しません。
+  **SIMULATED WIND** はFROM方位0〜359°・風速0〜20m/s。手動風スライダーを変更するとこのモードへ戻ります。
+- Open-Meteoの `current=wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto` を使用。
+  10分ごとに再取得、2秒の時定数でベクトルを補間します。失敗時は気象風が減衰し、描画・PC TESTは続きます。
+  気象風ゲイン100%は1m/sを1空間単位/sの目標速度へ変換する視覚化用スケールです。
+- **CAMERA ON** は既存ゲームの同じカメラ開始・Pose初期化処理を借用します。
+  既存Poseインスタンスを再利用し、画面同士でカメラ・推論・描画ループを重複起動しません。
+  LabではFaceモデル・撮影を起動しません。**SKELETON ON** は小窓に鏡像の骨格を重ねます。
+- 身体風は肩中心と腰中心から、鏡像表示の左右傾斜、胴体の画像上の伸縮、推定奥行き差を計算します。
+  Yは伸縮の目安であり、厳密な鉛直姿勢・前後移動の測定ではありません。
+  worldLandmarksがあればZに優先利用しますが、単眼推定は不安定なため範囲を制限します。
+  絶対傾斜と変化速度が全粒子へ作用し、CALIBRATEでその姿勢を基準にします。
+- 両手は独立した3D位置のサンプル差から速度を推定。鏡像の右移動→+X、上移動→+Y。
+  影響半径は空間一辺の5〜50%、半径内で `exp(-r²/(2σ²))`, `σ=半径/2`、半径外は0です。
+  HAND FIELD DEBUGは左右の球状領域を緑／橙で表示。停止・欠損時は局所風が減衰します。
+- エンジンの共通入力は `input({body:[x,y,z],left:[x,y,z],right:[x,y,z]}, timestampMs)`。
+  検出欠損は該当項目をnullにします。PC TESTのスライダー・AUTO MOTIONもこの同じ入力を使います。
+  4風成分を位置ごとに合成し、速度目標へ指数追従（係数6/s）、速度上限25空間単位/s、dt上限0.1秒・内部1/60秒刻み。
+  非表示中はLabのRAFを停止し、復帰時の入力差分もリセットします。
+- 粒子、気象、身体、手の設定だけを `wind-tree-lab-v1` のlocalStorageへ保存します。
+  GPS座標・キャリブレーション・画像・ランドマークは保存しません。画面退出時にカメラ、Pose、気象更新タイマー、
+  OrbitControls、Geometry、Material、Rendererを解放します。気象APIへは取得操作の際に座標だけを送信します。
+- WEATHER ONLY / BODY ONLY / LEFT HAND ONLY / RIGHT HAND ONLY / ALL ON / ALL OFFで成分を切り分けて確認できます。
+  画面負荷が続く場合は描画画素密度を1へ下げます。粒子数は勝手に変更しません。
+
+モジュールは `src/wind-engine/` の8クラス、画面は `wind-lab.js` と `wind-lab.css`。
+KIDS/ARTで同じ入力・物理演算を再利用できるよう、WindEngineはThree.jsとDOMに依存しません。
+
+```sh
+npm run build
+npm test
+# README冒頭の方法でPlaywrightをリポジトリ外へ導入し、静的サーバーを起動してから:
+PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/wind-lab-browser.mjs
+# 任意: 実気象APIと実Pose＋生成カメラ。実人物の画像は使いません。
+PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/wind-lab-live-browser.mjs
+```
+
+API仕様はOpen-Meteo公式リポジトリの [OpenAPI](https://github.com/open-meteo/open-meteo/blob/main/openapi/forecast.yml) と
+[単位変換実装](https://github.com/open-meteo/open-meteo/blob/main/Sources/App/Helper/SiUnit.swift) に照合しています。
+気象データは予測であり精密な実測ではありません。[Open-Meteo利用条件](https://open-meteo.com/en/terms)も参照してください。
+カメラと位置情報はHTTPSまたはlocalhostが必要です。
+
+自動テストは生成カメラ／合成Poseの身体入力、実モデルの初期化と生成映像への推論、PC TEST、
+GPS拒否、API成功・失敗、8000粒子の履歴制限、カメラ共有と解放、390px幅のUIを検証します。
+iPhone/iPad/Android/Windowsの実機、実人物の追跡精度、奥行きと体感方向、実GPS許可、端末別FPSは別途確認が必要です。
