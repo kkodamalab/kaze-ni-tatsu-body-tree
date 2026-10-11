@@ -155,8 +155,27 @@ try {
   assert.equal(await lab(() => labTest.lab.field.trails.visible), false);
   await page.locator("#labResetSettings").click();
   assert.equal(await lab(() => labTest.lab.engine.count), 1000);
+  // Observe the reset in the click event, before the next RAF advances simulation.
+  await page.evaluate(() =>
+    document.querySelector("#labResetParticles").addEventListener(
+      "click",
+      () => {
+        const e = labTest.lab.engine;
+        window.particleResetAudit = {
+          time: e.time,
+          first: Array.from(e.positions.slice(0, 3)),
+          stopped: e.velocities.every((v) => v === 0),
+        };
+      },
+      { once: true },
+    ),
+  );
   await page.locator("#labResetParticles").click();
-  assert.equal(await lab(() => labTest.lab.engine.time), 0);
+  assert.deepEqual(await lab(() => particleResetAudit), {
+    time: 0,
+    first: [-9, -9, -9],
+    stopped: true,
+  });
   await page.locator("#labResetView").click();
   assert.deepEqual(
     await lab(() => labTest.lab.controls.target.toArray()),

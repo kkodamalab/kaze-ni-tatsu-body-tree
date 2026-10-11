@@ -182,3 +182,47 @@ PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index
 生成カメラと合成Face結果で笑顔撮影・写真操作・同意・参加者交代・入力喪失/復帰を検証します。
 8000粒子の3モード、繰り返し切替でのGPUテクスチャ解放、390px幅の操作も確認します。
 実人物のPose/笑顔、実GPS、Windows/Edge・iPhone/iPad/Safari・Android実機と端末別FPSは未検証です。
+
+## 3Dスケルトンアバター・XYZ AXIS
+
+詳細設定の既存 **XYZ AXIS** はDOT / KIDS / ARTすべてでON/OFFが有効です（初期ON）。
+モード側の軸の強制非表示を廃止しました。軸とアバターの切替で粒子・速度・履歴・視点をリセットしません。
+
+新しい **AVATAR** セクションの **3D AVATAR**（初期OFF）、**AVATAR SIZE**（20〜300%、初期100%）、
+**AVATAR STYLE**（SKELETON / POINTS、初期SKELETON）は同じWindConfigのlocalStorageに保存します。
+RESET SETTINGSで初期値へ戻ります。KIDS/ARTでは「詳細設定」を開いて操作してください。
+SKELETONは関節点＋骨格線、POINTSは関節点だけ。3モードで同じSkeletonAvatarを使用します。
+関節と線は2つのBufferGeometryとPoints / LineSegmentsを更新して再利用し、退出時にdisposeします。
+カメラ・Pose・Faceモデルを追加で起動しません。2D骨格の表示設定とは独立しています。
+
+33点の標準接続を2D骨格と共通化しています。3Dは有効なworldLandmarksを優先し、なければ正規化座標を使います。
+左右反転のX、上向きY、既存WindEngineと同じZ符号を使用し、腰の中点を原点に置きます。
+初回有効姿勢で表示縮尺を決め、手を上げるたびに全身が縮まないよう保持します。
+縮尺はカメラ開始・参加者交代・world/正規化入力の切替で取り直します。
+X/Yを優先して推定Zを制限し、45msの軽い指数平滑化を適用します。
+最終倍率は設定サイズを基本とし、大きな動作や300%表示で立方体を越える場合だけ一様に収めます。
+検出欠損時は250ms保持、次の500msでフェード、750msで非表示。復帰すると再表示します。
+非表示タブから戻った時は新しい入力を待ちます。関節は白、左右手首は緑／橙、線はシアン系です。
+KIDSの明るい背景では濃いシアン系に調整し、粒子に埋もれないよう深度テストを無効にします。
+
+PC TESTは同じ身体軸・左右手の入力から簡易33点骨格を作り、手首・腕・上半身の動きに追従します。
+PC TESTは膝用の独立入力を持たないため、脚は標準姿勢です。実Poseでは膝・足首も33点から追従します。
+DEBUGで **PC TEST SYNTHETIC / POSE WORLD / POSE NORMALIZED**、検出／フェード／欠損、
+有効点数、表示サイズ・実効表示倍率、左右手首座標を確認できます。BODY風・左右局所風の位置も従来どおり表示します。
+
+座標変換はCoordinateMapperに集約しました。ただし、既存の風の体感・作用位置を維持するため、
+実PoseのHandWindは従来のカメラ中心座標、アバターは腰中心に正規化した表示座標です。
+実Poseのアバター手首と風発生位置は完全一致せず、DEBUGに両方の値と座標原点を表示します。
+PC TESTの100%・フィット前では手首とHandWindの位置が一致します。表示サイズ・平滑化・フィットによる差は物理に影響しません。
+今回、実Poseの左右手発生位置の変更は行っていません。将来の統一は同じCoordinateMapper内の変換から行えます。
+
+```sh
+npm test
+npm run build
+PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/avatar-browser.mjs
+```
+
+アバター追加後の単体テストは44件、ブラウザ回帰は6スイートです。
+アバターの20/100/300%、スタイル、全モードの軸切替、33点・world/正規化座標、姿勢変化、欠損・復帰、
+設定復元、共通カメラ/Pose、8000粒子、60回の表示切替でGPU Geometry数が増えないこと、390px幅の操作と退出時解放を検証します。
+ブラウザのPoseは合成33点、カメラは生成映像です。実人物・実カメラの追従精度、実スマートフォン／Safari／Edgeの描画とFPSは未検証です。

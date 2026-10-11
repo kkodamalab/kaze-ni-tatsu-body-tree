@@ -10,6 +10,9 @@ export const DEFAULTS = Object.freeze({
   trailDuration: 1,
   trailOpacity: 50,
   axes: true,
+  avatar: false,
+  avatarSize: 100,
+  avatarStyle: "SKELETON",
   weather: true,
   weatherGain: 100,
   direction: 0,
@@ -25,6 +28,7 @@ export const DEFAULTS = Object.freeze({
   handDebug: false,
 });
 export const RANGES = Object.freeze({
+  avatarSize: [20, 300, 1],
   gridX: [3, 20, 1],
   gridY: [3, 20, 1],
   gridZ: [3, 20, 1],
@@ -48,6 +52,8 @@ export function sanitizeConfig(source = {}) {
     const v = source?.[key];
     if (typeof c[key] === "boolean") {
       if (typeof v === "boolean") c[key] = v;
+    } else if (key === "avatarStyle") {
+      if (["SKELETON", "POINTS"].includes(v)) c[key] = v;
     } else if (typeof v === "number" && Number.isFinite(v)) {
       const [lo, hi, step] = RANGES[key];
       c[key] = Math.max(lo, Math.min(hi, v));

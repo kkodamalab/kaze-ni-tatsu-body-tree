@@ -229,6 +229,8 @@ export class LabPlay {
       this.$("#labPhotoStatus").textContent =
         "撮影は同意確認後に有効になります";
     }
+    this.lab.mapper.resetAvatar();
+    this.lab.avatar?.resetTracking();
     this.lab.engine?.reset();
     this.lab.field?.rebuild();
     this.sync(performance.now());
