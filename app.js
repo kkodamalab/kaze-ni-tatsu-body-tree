@@ -105,7 +105,10 @@ const faceCapture = new FaceCapture({
   isPlaying: () => running && !clock.paused && !document.hidden,
 });
 window.windTreePhotoGift = Object.freeze({
-  getSelectedGift: () => photos.getSelectedGift(resultInfo),
+  getSelectedGift: () =>
+    labActive
+      ? labInstance?.getSelectedGift() || null
+      : photos.getSelectedGift(resultInfo),
 });
 for (const side of ["body", "left", "right"]) {
   const input = $(`#${side}Sensitivity`);
@@ -914,6 +917,7 @@ $("#windLabBtn").onclick = async () => {
     exitLab = exit;
     labInstance = new WindLab({
       root: $("#windLab"),
+      initialDuration: validDuration($("#durationNumber").value) || 30,
       video,
       onExit: exit,
       camera: {

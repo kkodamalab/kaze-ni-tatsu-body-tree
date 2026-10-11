@@ -6,6 +6,9 @@ import { WeatherWind } from "./src/wind-engine/WeatherWind.js";
 import { CoordinateMapper } from "./src/wind-engine/CoordinateMapper.js";
 import { ParticleField } from "./src/wind-engine/ParticleField.js";
 import { WindDebug } from "./src/wind-engine/WindDebug.js";
+import { drawPoseOverlay } from "./src/wind-lab/PoseOverlay.js";
+import { SceneModes } from "./src/wind-lab/SceneModes.js";
+import { LabPlay } from "./src/wind-lab/LabPlay.js";
 const groups = {
   PARTICLES: [
     ["gridX", "GRID X"],
@@ -40,7 +43,7 @@ const groups = {
   ],
 };
 export class WindLab {
-  constructor({ root, video, camera, onExit }) {
+  constructor({ root, video, camera, onExit, initialDuration = 30 }) {
     this.root = root;
     this.video = video;
     this.camera = camera;
@@ -61,6 +64,15 @@ export class WindLab {
     this.lastVideo = -1;
     this.lastDetection = 0;
     this.mapper = new CoordinateMapper();
+    this.diagnostics = {
+      poseFps: 0,
+      renderFps: 0,
+      poseFrames: 0,
+      renderFrames: 0,
+      windowStart: performance.now(),
+      landmarkCount: 0,
+    };
+    this.mode = "DOT";
     this.mount();
     this.weather = new WeatherWind({ onChange: () => this.weatherStatus() });
     this.engine = new WindEngine(this.store.values, this.weather);
@@ -85,12 +97,26 @@ export class WindLab {
       this.resetView();
       this.field = new ParticleField(this.scene, this.engine);
       this.debug = new WindDebug(this.scene, this.engine);
+      this.modes = new SceneModes(
+        this.scene,
+        this.engine,
+        this.field,
+        this.renderer,
+      );
+      this.play = new LabPlay(this, initialDuration);
       this.observer = new ResizeObserver(() => this.resize());
       this.observer.observe(this.stage);
       this.resize();
       this.visibility = () => {
+        this.play?.growth.setHidden(
+          document.hidden || this.mode === "DOT",
+          performance.now(),
+        );
+        this.play?.face.pause();
         this.last = 0;
         this.lastDetection = 0;
+        this.diagnostics.windowStart = performance.now();
+        this.diagnostics.poseFrames = this.diagnostics.renderFrames = 0;
         this.engine.suspend();
         if (document.hidden) {
           cancelAnimationFrame(this.raf);
@@ -116,8 +142,20 @@ export class WindLab {
           `<fieldset><legend>${name}</legend>${name === "WEATHER" ? `<p>位置情報をOpen-Meteoへ送信して、周辺の大まかな風を表示します。正確な位置は保存しません。</p><button id="labGps">現在地の風を取得 / GPS WEATHER</button><p>MANUAL LOCATION：デモ地点は南大沢周辺（現在地ではありません）。座標は保存しません。</p><label>緯度 <input id="labLatitude" type="number" min="-90" max="90" step="any" value="35.61"></label><label>経度 <input id="labLongitude" type="number" min="-180" max="180" step="any" value="139.38"></label><button id="labManual">手動地点の風を取得</button><button id="labSimulated">SIMULATED WIND</button><p><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>（予測値）</p>` : ""}${fields.map(([key, label]) => (typeof c[key] === "boolean" ? `<label><input id="lab-${key}" data-key="${key}" type="checkbox" ${c[key] ? "checked" : ""}> ${label}</label>` : `<label for="lab-${key}">${label}<output id="lab-value-${key}">${c[key]}</output><input id="lab-${key}" data-key="${key}" type="range" min="${RANGES[key][0]}" max="${RANGES[key][1]}" step="${RANGES[key][2]}" value="${c[key]}"></label>`)).join("")}${name === "PARTICLES" ? '<button id="labResetParticles">PARTICLE RESET</button><button id="labResetView">CAMERA VIEW RESET</button>' : ""}${name === "BODY" ? '<button id="labCalibrate">CALIBRATE</button><p>現在の姿勢をニュートラルにします。奥行きは単眼推定の目安です。</p>' : ""}</fieldset>`,
       )
       .join("");
-    this.root.innerHTML = `<header class="lab-header"><h1>3D WIND LAB</h1><div class="lab-weather"><p id="labWeatherStatus" class="lab-status" role="status"></p><small id="labWeatherDetails"></small></div><div><button id="labCamera" aria-pressed="false">CAMERA OFF</button><button id="labSkeleton" aria-pressed="false">SKELETON OFF</button><button id="labPc" aria-pressed="true">PC TEST ON</button><button id="labExit">ゲームに戻る</button></div></header><div id="labMessage" class="lab-toast" role="status"></div><div class="lab-layout"><div class="lab-stage"><div class="lab-preview hidden"><canvas id="labSkeletonCanvas"></canvas></div><div class="lab-caption">ドラッグ / タッチで回転・ピンチでズーム<br>+X 東（右） / +Y 上 / -Z 北（奥）<br>緑 = 左手 / 橙 = 右手</div></div><aside class="lab-settings">${settings}<fieldset id="labPcPanel"><legend>PC TEST</legend><button id="labAuto" aria-pressed="false">AUTO MOTION OFF</button>${["body", "left", "right"].map((part) => ["X", "Y", "Z"].map((axis, i) => `<label>${part.toUpperCase()} ${axis}<output id="lab-value-test-${part}${axis}">${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}</output><input id="lab-test-${part}${axis}" type="range" min="${part === "body" ? -1 : -10}" max="${part === "body" ? 1 : 10}" step=".01" value="${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}"></label>`).join("")).join("")}</fieldset><fieldset><legend>DEBUG</legend>${["WEATHER ONLY", "BODY ONLY", "LEFT HAND ONLY", "RIGHT HAND ONLY", "ALL ON", "ALL OFF"].map((s, i) => `<button data-preset="${i}">${s}</button>`).join("")}<pre id="labDebug"></pre><button id="labResetSettings">RESET SETTINGS</button></fieldset></aside></div>`;
+    this.root.innerHTML = `<header class="lab-header"><h1>3D WIND LAB</h1><nav aria-label="DISPLAY MODE">${["DOT", "KIDS", "ART"].map((mode) => `<button data-mode="${mode}" aria-pressed="${mode === "DOT"}">${mode}</button>`).join("")}</nav><div class="lab-weather"><p id="labWeatherStatus" class="lab-status" role="status"></p><small id="labWeatherDetails"></small></div><div><button id="labCamera" aria-pressed="false">CAMERA OFF</button><button id="labSkeleton" aria-pressed="false">SKELETON OFF</button><button id="labPc" aria-pressed="true">PC TEST ON</button><button id="labExit">ゲームに戻る</button></div></header><div id="labMessage" class="lab-toast" role="status"></div><div class="lab-layout"><div class="lab-stage"><div class="lab-preview hidden"><canvas id="labSkeletonCanvas"></canvas></div><div class="lab-caption">ドラッグ / タッチで回転・ピンチでズーム<br>+X 東（右） / +Y 上 / -Z 北（奥）<br>緑 = 左手 / 橙 = 右手</div></div><aside class="lab-settings">${settings}<fieldset id="labPcPanel"><legend>PC TEST</legend><button id="labAuto" aria-pressed="false">AUTO MOTION OFF</button>${["body", "left", "right"].map((part) => ["X", "Y", "Z"].map((axis, i) => `<label>${part.toUpperCase()} ${axis}<output id="lab-value-test-${part}${axis}">${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}</output><input id="lab-test-${part}${axis}" type="range" min="${part === "body" ? -1 : -10}" max="${part === "body" ? 1 : 10}" step=".01" value="${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}"></label>`).join("")).join("")}</fieldset><fieldset class="lab-debug"><legend>DEBUG</legend>${["WEATHER ONLY", "BODY ONLY", "LEFT HAND ONLY", "RIGHT HAND ONLY", "ALL ON", "ALL OFF"].map((s, i) => `<button data-preset="${i}">${s}</button>`).join("")}<pre id="labDebug"></pre><button id="labResetSettings">RESET SETTINGS</button></fieldset></aside></div>`;
+    this.root.dataset.displayMode = "DOT";
     this.$ = (s) => this.root.querySelector(s);
+    const details = document.createElement("details");
+    details.className = "lab-details";
+    details.open = true;
+    details.innerHTML = "<summary>詳細設定 / SETTINGS</summary>";
+    this.$(".lab-settings").before(details);
+    details.append(this.$(".lab-settings"));
+    this.root
+      .querySelectorAll("[data-mode]")
+      .forEach(
+        (button) => (button.onclick = () => this.setMode(button.dataset.mode)),
+      );
     this.stage = this.$(".lab-stage");
     this.preview = this.$(".lab-preview");
     this.preview.prepend(this.video);
@@ -182,6 +220,7 @@ export class WindLab {
     this.$("#labPc").onclick = () => {
       this.pc = !this.pc;
       if (this.pc) {
+        this.play?.stopPhotos();
         this.cameraOn = false;
         this.camera.stop();
         this.preview.classList.add("hidden");
@@ -207,6 +246,29 @@ export class WindLab {
         }),
     );
   }
+  acceptInput(sample, time, source = "sensor") {
+    this.engine.input(sample, time);
+    this.play?.acceptInput(sample, time, source);
+  }
+  getSelectedGift() {
+    return this.play?.getSelectedGift() || null;
+  }
+  setMode(mode) {
+    if (!this.modes || this.mode === mode) return;
+    this.mode = mode;
+    this.modes.setMode(mode);
+    this.root.dataset.displayMode = mode;
+    this.$(".lab-details").open = mode === "DOT";
+    this.root
+      .querySelectorAll("[data-mode]")
+      .forEach((button) =>
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.mode === mode),
+        ),
+      );
+    this.play.setMode(mode);
+  }
   apply(config) {
     const previous = this.engine.positions;
     this.store.replace(config);
@@ -214,6 +276,11 @@ export class WindLab {
     if (previous !== this.engine.positions) this.field?.rebuild();
     else this.field?.drawHistory();
     for (const [key, value] of Object.entries(this.store.values)) {
+      const primary = this.$("#lab-primary-" + key);
+      if (primary) {
+        if (primary.type === "checkbox") primary.checked = value;
+        else primary.value = value;
+      }
       const input = this.$("#lab-" + key);
       if (input) {
         if (input.type === "checkbox") input.checked = value;
@@ -245,6 +312,7 @@ export class WindLab {
   async toggleCamera() {
     if (this.cameraPending) return;
     if (this.cameraOn) {
+      this.play?.stopPhotos();
       this.cameraOn = false;
       this.camera.stop();
       this.engine.suspend();
@@ -302,44 +370,20 @@ export class WindLab {
     return { body, left, right };
   }
   skeletonDraw(lm) {
-    const canvas = this.$("#labSkeletonCanvas");
-    canvas.width = 360;
-    canvas.height = 270;
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, 360, 270);
-    if (!this.skeleton || !lm) return;
-    ctx.strokeStyle = "#88ffe2";
-    ctx.lineWidth = 3;
-    for (const [a, b] of [
-      [11, 12],
-      [11, 23],
-      [12, 24],
-      [23, 24],
-      [11, 13],
-      [13, 15],
-      [12, 14],
-      [14, 16],
-      [23, 25],
-      [25, 27],
-      [24, 26],
-      [26, 28],
-    ]) {
-      const p = lm[a],
-        q = lm[b];
-      if (!p || !q || (p.visibility ?? 1) < 0.45 || (q.visibility ?? 1) < 0.45)
-        continue;
-      ctx.beginPath();
-      ctx.moveTo((1 - p.x) * 360, p.y * 270);
-      ctx.lineTo((1 - q.x) * 360, q.y * 270);
-      ctx.stroke();
-    }
+    this.skeletonPoints = drawPoseOverlay(
+      this.$("#labSkeletonCanvas"),
+      lm,
+      this.skeleton,
+      this.video,
+    );
   }
   frame(t) {
     this.raf = null;
     if (this.disposed || document.hidden) return;
     const dt = this.last ? Math.min((t - this.last) / 1000, 0.1) : 0;
     this.last = t;
-    if (this.pc) this.engine.input(this.testSample(t), t);
+    this.diagnostics.renderFrames++;
+    if (this.pc) this.acceptInput(this.testSample(t), t, "pc");
     else if (this.cameraOn && t - this.lastPose >= 33) {
       this.lastPose = t;
       try {
@@ -350,38 +394,72 @@ export class WindLab {
           this.lastVideo = this.video.currentTime;
           const result = this.camera.detect(t);
           const lm = result?.landmarks?.[0];
-          this.engine.input(
+          this.diagnostics.poseFrames++;
+          this.diagnostics.landmarkCount = lm?.length || 0;
+          this.acceptInput(
             this.mapper.fromPose(lm, result?.worldLandmarks?.[0]),
             t,
+            "pose",
           );
           this.lastDetection = lm ? t : 0;
           this.skeletonDraw(lm);
         }
       } catch (e) {
-        this.engine.input(null, t);
+        this.acceptInput(null, t, "pose");
         this.skeletonDraw(null);
         this.message("身体推論が停止しました。描画は継続しています。");
       }
       if (t - this.lastDetection > 250) {
-        this.engine.input(null, t);
+        this.acceptInput(null, t, "pose");
         this.skeletonDraw(null);
       }
     }
-    this.engine.step(dt);
+    const diagnosticElapsed = t - this.diagnostics.windowStart;
+    if (diagnosticElapsed >= 1000) {
+      this.diagnostics.poseFps =
+        (this.diagnostics.poseFrames * 1000) / diagnosticElapsed;
+      this.diagnostics.renderFps =
+        (this.diagnostics.renderFrames * 1000) / diagnosticElapsed;
+      this.diagnostics.poseFrames = this.diagnostics.renderFrames = 0;
+      this.diagnostics.windowStart = t;
+    }
+    const state = this.play?.growth.tick(t);
+    if (
+      this.mode === "DOT" ||
+      !state ||
+      (state.phase !== "finished" && !state.paused)
+    )
+      this.engine.step(dt);
+    this.modes?.update(state?.growth || 0, this.engine.time);
     this.field.update();
     this.debug.update(this.engine);
+    if (
+      this.mode === "KIDS" ||
+      (this.mode === "ART" && !this.$(".lab-details").open)
+    ) {
+      this.debug.axes.visible = false;
+      this.debug.spheres.forEach((s) => (s.visible = false));
+      this.debug.weatherArrow.visible = false;
+    }
     this.controls.update();
     this.renderer.render(this.scene, this.view);
     if (t - (this.lastDebug || 0) > 200) {
-      this.$("#labDebug").textContent = this.debug.text(this.engine);
+      this.$("#labDebug").textContent = this.debug.text(
+        this.engine,
+        this.diagnostics,
+      );
       this.lastDebug = t;
     }
     if (dt > 0.045) this.slowFrames = (this.slowFrames || 0) + 1;
     else this.slowFrames = Math.max(0, (this.slowFrames || 0) - 1);
-    if (this.slowFrames > 30 && this.renderer.getPixelRatio() > 1) {
-      this.renderer.setPixelRatio(1);
-      this.resize();
-      this.message("描画負荷に合わせて画素密度を調整しました");
+    if (this.slowFrames > 30) {
+      this.field.quality = 0.5;
+      if (this.mode === "ART") this.field.glowScale = 0.65;
+      if (this.renderer.getPixelRatio() > 1) {
+        this.renderer.setPixelRatio(1);
+        this.resize();
+        this.message("描画負荷に合わせて画素密度を調整しました");
+      }
       this.slowFrames = 0;
     }
     this.raf = requestAnimationFrame((time) => this.frame(time));
@@ -415,6 +493,8 @@ export class WindLab {
     this.camera.stop();
     this.cameraOn = false;
     this.camera.release?.();
+    this.play?.dispose();
+    this.modes?.dispose();
     this.controls?.dispose();
     this.field?.dispose();
     this.debug?.dispose();

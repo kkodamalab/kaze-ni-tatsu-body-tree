@@ -56,6 +56,80 @@ export class ParticleField {
     this.trails.frustumCulled = false;
     this.scene.add(this.trails);
     this.capture();
+    this.setDisplayMode(this.displayMode || "DOT");
+  }
+  setDisplayMode(mode) {
+    this.displayMode = mode;
+    this.material.map?.dispose();
+    this.material.map = null;
+    // Dispose GPU attributes before replacing the visual geometry; physics arrays stay intact.
+    this.geometry.dispose();
+    this.geometry = new THREE.BufferGeometry();
+    this.geometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(this.engine.positions, 3).setUsage(
+        THREE.DynamicDrawUsage,
+      ),
+    );
+    this.points.geometry = this.geometry;
+    this.material.vertexColors = false;
+    this.material.blending = THREE.NormalBlending;
+    this.trailMaterial.blending = THREE.NormalBlending;
+    this.material.color.setHex(0xc8f1ff);
+    if (mode === "KIDS" || mode === "ART") {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 64;
+      const context = canvas.getContext("2d");
+      if (mode === "KIDS") {
+        context.fillStyle = "#ffffff";
+        context.beginPath();
+        context.moveTo(32, 4);
+        context.bezierCurveTo(60, 14, 57, 43, 32, 57);
+        context.bezierCurveTo(5, 43, 4, 16, 32, 4);
+        context.fill();
+        context.strokeStyle = "#ffffff";
+        context.lineWidth = 3;
+        context.beginPath();
+        context.moveTo(32, 20);
+        context.lineTo(32, 63);
+        context.stroke();
+        const palette = [0xffd25c, 0xf39a3d, 0xd9654b, 0x946239];
+        const colors = new Float32Array(this.engine.count * 3);
+        for (let i = 0; i < this.engine.count; i++) {
+          const color = new THREE.Color(
+            palette[Math.floor(Math.random() * palette.length)],
+          );
+          color.toArray(colors, i * 3);
+        }
+        this.geometry.setAttribute(
+          "color",
+          new THREE.BufferAttribute(colors, 3),
+        );
+        this.material.vertexColors = true;
+        this.material.color.setHex(0xffffff);
+      } else {
+        const gradient = context.createRadialGradient(32, 32, 1, 32, 32, 31);
+        gradient.addColorStop(0, "#fff");
+        gradient.addColorStop(0.2, "#b8efff");
+        gradient.addColorStop(0.5, "#3975a880");
+        gradient.addColorStop(1, "#0000");
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 64, 64);
+        this.material.blending = this.trailMaterial.blending =
+          THREE.AdditiveBlending;
+      }
+      this.material.map = new THREE.CanvasTexture(canvas);
+      this.material.transparent = true;
+      this.material.alphaTest = 0.02;
+      this.material.depthWrite = false;
+    } else {
+      this.material.transparent = false;
+      this.material.alphaTest = 0;
+      this.material.depthWrite = true;
+      this.trailMaterial.color.setHex(0x80cfff);
+    }
+    this.material.needsUpdate = true;
+    this.trailMaterial.needsUpdate = true;
   }
   capture() {
     const e = this.engine;
@@ -74,7 +148,7 @@ export class ParticleField {
         b = (a - 1 + this.samples) % this.samples;
       if (
         !Number.isFinite(this.times[b]) ||
-        now - this.times[b] > c.trailDuration
+        now - this.times[b] > c.trailDuration * (this.quality || 1)
       )
         continue;
       const p = this.history[a],
@@ -96,7 +170,13 @@ export class ParticleField {
   update() {
     const c = this.engine.config;
     this.points.visible = c.particles;
-    this.material.size = c.dotSize;
+    this.material.size =
+      c.dotSize *
+      (this.displayMode === "KIDS"
+        ? 6
+        : this.displayMode === "ART"
+          ? 3 * (this.glowScale || 1)
+          : 1);
     this.geometry.attributes.position.needsUpdate = true;
     this.trails.visible = c.trail && c.trailDuration > 0;
     this.trailMaterial.opacity = c.trailOpacity / 100;
@@ -108,6 +188,7 @@ export class ParticleField {
       if (object) {
         this.scene.remove(object);
         object.geometry.dispose();
+        object.material.map?.dispose();
         object.material.dispose();
       }
     }

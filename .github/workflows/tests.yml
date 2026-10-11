@@ -33,3 +33,5 @@ jobs:
           node tests/browser.mjs
           node tests/settings-photos-browser.mjs
           node tests/wind-lab-browser.mjs
+          node tests/pose-lab-browser.mjs
+          node tests/modes-play-browser.mjs

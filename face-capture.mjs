@@ -7,6 +7,7 @@ export class FaceCapture {
     onPhoto,
     getElapsed,
     isPlaying,
+    getAspect = () => innerWidth / innerHeight,
     workerFactory = () =>
       new Worker(new URL("./face-worker.js", import.meta.url)),
   }) {
@@ -18,6 +19,7 @@ export class FaceCapture {
       getElapsed,
       isPlaying,
       workerFactory,
+      getAspect,
     });
     this.generation = 0;
     this.worker = null;
@@ -135,12 +137,7 @@ export class FaceCapture {
       capturedAt = new Date().toISOString();
     let canvas;
     try {
-      canvas = mirroredFrame(
-        this.video,
-        960,
-        undefined,
-        innerWidth / innerHeight,
-      );
+      canvas = mirroredFrame(this.video, 960, undefined, this.getAspect());
       if (!canvas) return;
       const quality =
           0.5 * this.gate.score +
@@ -150,7 +147,8 @@ export class FaceCapture {
       const blob = await new Promise((resolve) =>
         canvas.toBlob(resolve, "image/jpeg", 0.82),
       );
-      if (generation !== this.generation || !this.enabled) return;
+      if (generation !== this.generation || !this.enabled || !this.isPlaying())
+        return;
       if (
         this.session.add(
           blob,
