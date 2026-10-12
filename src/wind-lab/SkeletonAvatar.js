@@ -64,6 +64,8 @@ export class SkeletonAvatar {
   }
   input(frame, now) {
     if (this.disposed || !frame || !Number.isFinite(now)) return;
+    if (!frame.points?.some((p) => p?.length === 3 && p.every(Number.isFinite)))
+      return;
     const reset = this.lastInput === null || now - this.lastInput > 750;
     this.valid.fill(0);
     frame.points.slice(0, 33).forEach((p, i) => {
@@ -75,6 +77,7 @@ export class SkeletonAvatar {
     });
     this.lastInput = now;
     this.source = frame.source;
+    this.origin = frame.origin || "SYNTHETIC";
   }
   resetTracking() {
     this.lastInput = null;
@@ -91,9 +94,20 @@ export class SkeletonAvatar {
     this.config = config;
     const age =
       this.lastInput === null ? Infinity : Math.max(0, now - this.lastInput);
+    this.poseAge = age;
     this.opacity = Math.max(0, Math.min(1, 1 - (age - 250) / 500));
     this.state = age <= 250 ? "DETECTED" : age < 750 ? "HOLD / FADE" : "LOST";
-    this.group.visible = config.avatar && this.opacity > 0;
+    this.group.visible =
+      config.avatar && this.opacity > 0 && this.valid.some(Boolean);
+    this.hiddenReason = !config.avatar
+      ? "AVATAR OFF"
+      : this.lastInput === null
+        ? "NO VALID POSE / ORIGIN"
+        : age >= 750
+          ? "POSE EXPIRED"
+          : !this.valid.some(Boolean)
+            ? "NO VALID LANDMARKS"
+            : "NONE";
     this.lines.visible = config.avatarStyle === "SKELETON";
     this.jointMaterial.opacity = this.lineMaterial.opacity = this.opacity;
     const alpha = 1 - Math.exp(-Math.min(Math.max(dt, 0), 0.1) / 0.045);
@@ -178,7 +192,7 @@ export class SkeletonAvatar {
   }
   text() {
     const f = (v) => (v ? v.map((n) => n.toFixed(2)).join(", ") : "—");
-    return `3D AVATAR ${this.config?.avatar ? "ON" : "OFF"} | ${this.config?.avatarSize || 100}% / ${this.config?.avatarStyle || "SKELETON"}\nAVATAR INPUT ${this.source} | ${this.state || "LOST"} | VALID ${this.validCount || 0}/33 | HELD ${this.heldCount || 0}/33\nAVATAR display scale ${(this.displayScale || 1).toFixed(2)} (visual only)\nAVATAR LEFT wrist (${f(this.wrist("left"))})\nAVATAR RIGHT wrist (${f(this.wrist("right"))})\nHip-centered shared coordinates. Wrist anchors = accepted HandWind positions at every display size.`;
+    return `AVATAR INPUT ${this.source} | ${this.state || "LOST"}\nVALID LANDMARKS ${this.validCount || 0}/33 (held ${this.heldCount || 0})\nLAST POSE AGE ${Number.isFinite(this.poseAge) ? Math.round(this.poseAge) + " ms" : "—"}\nRENDER VISIBLE ${this.group.visible ? "YES" : "NO"} | points ${this.jointGeometry.drawRange.count} / lines ${this.lineGeometry.drawRange.count / 2}\nHIDDEN REASON ${this.hiddenReason || "NO VALID POSE"} | ORIGIN ${this.origin || "NONE"}\n3D AVATAR ${this.config?.avatar ? "ON" : "OFF"} | ${this.config?.avatarSize || 100}% / ${this.config?.avatarStyle || "SKELETON"}\nAVATAR display scale ${(this.displayScale || 1).toFixed(2)} (visual only)\nAVATAR LEFT wrist (${f(this.wrist("left"))})\nAVATAR RIGHT wrist (${f(this.wrist("right"))})\nShared coordinates (origin reported above). Wrist anchors = accepted HandWind positions at every display size.`;
   }
   dispose() {
     if (this.disposed) return;

@@ -19,6 +19,7 @@ export class CoordinateMapper {
   }
   resetAvatar() {
     this.avatarReference = null;
+    this.avatarOrigin = null;
   }
   point(p) {
     return [
@@ -30,15 +31,32 @@ export class CoordinateMapper {
   // One hip-centered coordinate frame for avatar and physical hand input.
   avatarPose(landmarks, worldLandmarks) {
     const lm = landmarks || [];
-    if (![23, 24].every((i) => validLandmark(lm[i]))) return null;
+    if (!lm.some(validLandmark)) return null;
     const finite3 = (p) => validLandmark(p) && Number.isFinite(p.z);
     const world =
       worldLandmarks?.length >= 33 &&
       [11, 12, 23, 24].every((i) => finite3(worldLandmarks[i]));
     const input = world ? worldLandmarks : lm;
-    const hip = ["x", "y", "z"].map(
-      (k) => ((input[23][k] || 0) + (input[24][k] || 0)) / 2,
-    );
+    const source = world ? "POSE WORLD" : "POSE NORMALIZED";
+    let hip, origin;
+    if ([23, 24].every((i) => validLandmark(input[i]))) {
+      hip = ["x", "y", "z"].map(
+        (k) => ((input[23][k] || 0) + (input[24][k] || 0)) / 2,
+      );
+      origin = "HIPS";
+    } else if (this.avatarOrigin?.source === source) {
+      hip = this.avatarOrigin.hip;
+      origin = "HELD HIPS";
+    } else if ([11, 12].every((i) => validLandmark(input[i]))) {
+      // Upper-body framing must not discard otherwise reliable arms/face. Estimate
+      // a display origin only; missing hips remain invalid for body wind physics.
+      hip = ["x", "y", "z"].map(
+        (k) => ((input[11][k] || 0) + (input[12][k] || 0)) / 2,
+      );
+      hip[1] += world ? 0.5 : 0.3;
+      origin = "ESTIMATED FROM SHOULDERS";
+    } else return null;
+    this.avatarOrigin = { source, hip };
     const points = Array.from({ length: 33 }, (_, i) => {
       const p = input[i];
       if (!validLandmark(lm[i]) || !validLandmark(p)) return null;
@@ -55,7 +73,6 @@ export class CoordinateMapper {
         .filter(Boolean)
         .flatMap((p) => [Math.abs(p[0]), Math.abs(p[1])]),
     );
-    const source = world ? "POSE WORLD" : "POSE NORMALIZED";
     // Freeze the initial display scale so lifting a hand does not shrink the whole body.
     if (this.avatarReference?.source !== source)
       this.avatarReference = { source, extent };
@@ -73,6 +90,7 @@ export class CoordinateMapper {
     return {
       points: mappedPoints,
       source,
+      origin,
       windHands: {
         left: mappedPoints[15],
         right: mappedPoints[16],

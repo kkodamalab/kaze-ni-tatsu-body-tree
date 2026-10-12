@@ -311,3 +311,23 @@
     font-size: 12px;
   }
 }
+
+.lab-avatar-status {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  max-height: 45%;
+  overflow: auto;
+  z-index: 4;
+  margin: 0;
+  padding: 8px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  color: #fff;
+  background: #102638e6;
+  pointer-events: none;
+}
+.lab-avatar-status[hidden] {
+  display: none;
+}
