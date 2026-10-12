@@ -51,6 +51,8 @@ try {
   await page.evaluate((lm) => (poseAudit.landmarks = lm), lm);
   await page.waitForFunction(() => poseAudit.lab.skeletonPoints === 33);
   await preset("BODY ONLY");
+  // Remove transition inertia from previous local winds before checking a global-only field.
+  await page.evaluate(() => poseAudit.lab.engine.velocities.fill(0));
   await page.waitForFunction(() => poseAudit.lab.engine.velocities[1500] > 0.5);
   const global = await page.evaluate(() => {
     const v = poseAudit.lab.engine.velocities;
