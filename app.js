@@ -1,3 +1,4 @@
+import { PosePipeline } from "./pose-pipeline.mjs";
 import { screenPoint, screenAxis, HandWind, AutumnLeaves } from "./autumn.mjs";
 import {
   TrialClock,
@@ -171,23 +172,12 @@ function resize() {
 addEventListener("resize", resize);
 resize();
 async function initPose() {
+  if (pose?.error) {
+    pose.close();
+    pose = null;
+  }
   if (pose) return;
-  const { PoseLandmarker, FilesetResolver } =
-    await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/+esm");
-  const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22-rc.20250304/wasm",
-  );
-  pose = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath:
-        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-    },
-    runningMode: "VIDEO",
-    numPoses: 1,
-    minPoseDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-    minPosePresenceConfidence: 0.5,
-  });
+  pose = await PosePipeline.create();
 }
 async function cameraStart() {
   stream = await navigator.mediaDevices.getUserMedia({
@@ -541,6 +531,7 @@ function render() {
   }
 }
 function stopCamera() {
+  pose?.reset?.();
   if (stream) {
     stream.getTracks().forEach((t) => t.stop());
     stream = null;

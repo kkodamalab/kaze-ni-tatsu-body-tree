@@ -30,9 +30,4 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           curl --fail --retry 10 --retry-connrefused --retry-delay 1 http://127.0.0.1:8000/ > /dev/null
-          node tests/browser.mjs
-          node tests/settings-photos-browser.mjs
-          node tests/wind-lab-browser.mjs
-          node tests/pose-lab-browser.mjs
-          node tests/modes-play-browser.mjs
-          node tests/avatar-browser.mjs
+          node scripts/run-browser-tests.mjs

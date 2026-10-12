@@ -211,10 +211,10 @@ DEBUGで **PC TEST SYNTHETIC / POSE WORLD / POSE NORMALIZED**、検出／フェ�
 有効点数、表示サイズ・実効表示倍率、左右手首座標を確認できます。BODY風・左右局所風の位置も従来どおり表示します。
 
 座標変換はCoordinateMapperに集約しました。ただし、既存の風の体感・作用位置を維持するため、
-実PoseのHandWindは従来のカメラ中心座標、アバターは腰中心に正規化した表示座標です。
-実Poseのアバター手首と風発生位置は完全一致せず、DEBUGに両方の値と座標原点を表示します。
-PC TESTの100%・フィット前では手首とHandWindの位置が一致します。表示サイズ・平滑化・フィットによる差は物理に影響しません。
-今回、実Poseの左右手発生位置の変更は行っていません。将来の統一は同じCoordinateMapper内の変換から行えます。
+Phase 5で実PoseのHandWindも腰中心の共通座標へ統一しました。
+アバターの手首は平滑化・ジャンプ検査後のHandWind.positionに固定し、全表示サイズで一致します。
+表示倍率・立方体フィットは胴体など他の関節だけへ適用し、手首の位置・風の影響半径を変更しません。
+そのためサイズ変更時に腕の表示上の長さ・比率は変わります。
 
 ```sh
 npm test
@@ -226,3 +226,57 @@ PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index
 アバターの20/100/300%、スタイル、全モードの軸切替、33点・world/正規化座標、姿勢変化、欠損・復帰、
 設定復元、共通カメラ/Pose、8000粒子、60回の表示切替でGPU Geometry数が増えないこと、390px幅の操作と退出時解放を検証します。
 ブラウザのPoseは合成33点、カメラは生成映像です。実人物・実カメラの追従精度、実スマートフォン／Safari／Edgeの描画とFPSは未検証です。
+
+
+## Phase 5 — 身体追従・風の校正
+
+最新mainのXYZ AXIS / 3D AVATAR / SIZE / STYLEを再利用し、追加モードは作っていません。
+CoordinateMapperの腰中心・鏡像・上向きYの座標を、BodyWind / HandWind / Avatarで共有します。
+worldLandmarksを優先し、なければ正規化画像座標を使います。実Poseの手の物理入力位置を旧カメラ中心座標から変更しました。
+手首の描画は受理済みの物理位置をそのまま使用します。サイズ20/100/300%でも風の中心・半径は移動しません。
+胴体等の表示倍率を変えても手首は固定されるため、腕の見た目の比率は変わります。
+
+BodyWindは肩と腰の傾きの比からX/Z方向を計算し、Y入力は0（PC TESTのYは従来どおり）です。
+右傾斜→+X、左傾斜→-X、奥行き傾斜→Z。BODY ONLYで全粒子へ同じ風を与えます。
+CALIBRATEは現在の姿勢を基準とし、角度の差分・風ベクトル・校正状態をDEBUGで確認できます。
+**BODY DEAD ZONE** は0〜15度、初期2度。デッドゾーン内では角度変化速度も風に加えません。
+校正姿勢からの角度差で判定し、大きな相対角度の風も有限範囲に制限します。身体軸の単発の大きな飛びも除外し、3サンプル安定すると変化速度0から受理します。
+
+**HAND SPEED THRESHOLD** は0〜3空間単位/s、初期0.15。
+**HAND SMOOTHING** は0〜100%、初期30%で、位置と速度目標を平滑化します。
+低信頼点を除外し、1サンプルの大きな座標ジャンプは受理せず、同じ場所で3サンプル続けば速度0から再捕捉します。
+速度20単位/s・速度目標の変化80単位/s²を上限とし、欠損/停止時は風が減衰します。
+設定は既存WindConfigに保存します。Gaussian球・左右の独立感度・半径5〜50%は維持します。
+HAND FIELD DEBUGは左シアン／右オレンジの中心マーカー、球、風の矢印を表示します。
+通常のKIDS/ARTでは隠し、詳細設定のBODY TRACKING DEBUGを明示的に開くと確認できます。
+
+PosePipelineとpose-workerは既存ゲームとLabで同じ1つのPoseモデルを共有します。
+Pose推論はWorker内で実行し、最大640pxの生成ImageBitmapをローカルに転送、処理中は追加フレームを積みません。
+描画は推論を待たず最新結果を使用し、Labでは同一結果を重複計上せず、500ms超の遅い結果を見送ります。
+カメラ停止時に世代番号で古い結果を無効化し、退出でWorkerをterminateします。
+起動45秒/推論10秒のタイムアウト、再起動時の失敗モデル解放に対応します。画像・点群を外部へ送信しません。
+Face Worker・同意・撮影・写真管理は既存仕様です。Web Worker、createImageBitmap、Worker内のWASMを利用できるブラウザが必要です。
+
+折りたたみ **BODY TRACKING DEBUG** は有効点数・実推論FPS/描画FPS・身体角度/差分/風・校正、
+左右の受理位置・速度・風・アバター手首・ジャンプ除外数を表示します。
+**TRACKING CSV** はDOTでも利用でき、最大6000行をメモリに保持します。
+指定のtimestamp、pose_detected、body_tilt/body_wind、左右の位置/速度、weather_wind、FPSを含みます。
+KIDS/ARTの既存プレイCSVにも同じ列を追加しました。CSVはクリック時のみ端末へダウンロードします。
+
+PC TESTの「合成33点Pose」からTEST A〜G（ニュートラル、左右/前後傾斜、左手左右、右手上下、両手、欠損/復帰）を選べます。
+同じCoordinateMapper / BodyWind / HandWindを通し、DEBUGにSYNTHETIC POSEと表示します。
+MANUAL / AUTO MOTIONに戻すと従来のPC TESTスライダーも使えます。合成テストではカメラ・モデルを起動しません。
+
+```sh
+npm test
+npm run build
+PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/phase5-browser.mjs
+```
+
+単体54件と7ブラウザスイートで、A〜G、全粒子/局所風、サイズ変更後の手首一致、ノイズ/ジャンプ/欠損、
+校正、CSV、遅いWorkerでもRAF継続、単一モデル、1000/8000粒子、既存ゲーム・成長・笑顔PHOTOを確認します。
+実モデルのWorker推論・Face推論と生成カメラ、実Open-Meteo取得は任意のオンラインテストでも確認します。
+visibility/presenceは[MediaPipe公式型定義](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/web/components/containers/landmark.d.ts)を確認しました。
+presenceはモデルが出力しない場合があり、未提供時はpresenceだけを理由に除外しません。visibilityの低い点は除外します。
+合成Poseは実人物の精度検証ではありません。実人物・実カメラ・実GPS・iPhone/iPad/Safari/Android/Windows/Edge実機、
+端末別FPS、照明・服・遮蔽・奥行き精度、子供の体感に合わせた最終感度調整は未検証です。

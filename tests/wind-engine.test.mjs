@@ -121,6 +121,7 @@ test("component switches and zero sensitivities are independent; ALL ON sums wea
   e.body.value = [2, 0, 0];
   e.body.raw = [0.4, 0, 0];
   e.body.age = 0;
+  e.configure({ ...e.config, bodyDeadZone: 0 });
   e.left.position = e.right.position = [0, 0, 0];
   e.left.velocity = e.left.target = [3, 0, 0];
   e.right.velocity = e.right.target = [4, 0, 0];
@@ -186,7 +187,7 @@ test("mirrored MediaPipe and independent detection loss; no first-frame/reacquis
   lm[16] = { x: 0.7, y: 0.8, z: -0.1, visibility: 0 };
   const input = mapper.fromPose(lm);
   assert.ok(input.body[0] > 0);
-  assert.deepEqual(input.left, [4, 6, 2]);
+  input.left.forEach((v, i) => near(v, [1.5, 3, 0.75][i]));
   assert.equal(input.right, null);
   assert.equal(mapper.fromPose(null).body, null);
   const h = new HandWind("left");

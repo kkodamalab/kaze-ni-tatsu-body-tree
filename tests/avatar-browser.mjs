@@ -109,9 +109,10 @@ try {
       Math.abs(avatarAudit.lab.avatar.wrist("left")[0] + 3) < 0.02 &&
       Math.abs(avatarAudit.lab.avatar.wrist("right")[1] - 3) < 0.02,
   );
-  assert.equal(
-    await page.evaluate(() => avatarAudit.lab.engine.left.position[0]),
-    -3,
+  assert.ok(
+    await page.evaluate(
+      () => Math.abs(avatarAudit.lab.engine.left.position[0] + 3) < 0.02,
+    ),
   );
   await page.locator("#lab-test-bodyX").fill("0.5");
   await wait(() => avatarAudit.lab.avatar.current[11 * 3] > 0.2);
@@ -159,13 +160,23 @@ try {
       avatarAudit.lab.avatar.validCount === 33 &&
       avatarAudit.lab.avatar.group.visible,
   );
+  await page.waitForFunction(
+    () =>
+      avatarAudit.lab.avatar.wrist("left")[1] > 0.5 &&
+      avatarAudit.lab.avatar.wrist("left")[2] < 0,
+  );
   const left = await page.evaluate(() => avatarAudit.lab.avatar.wrist("left"));
   assert.ok(left[0] < 0);
   assert.ok(left[1] > 0);
   assert.ok(left[2] < 0);
-  assert.equal(
-    await page.evaluate(() => avatarAudit.lab.engine.left.position[0]),
-    -6.000000000000001,
+  assert.ok(
+    await page.evaluate(
+      () =>
+        Math.abs(
+          avatarAudit.lab.avatar.wrist("left")[0] -
+            avatarAudit.lab.engine.left.position[0],
+        ) < 1e-5,
+    ),
   );
   await page.evaluate(() => {
     avatarAudit.landmarks[15].y -= 0.15;
