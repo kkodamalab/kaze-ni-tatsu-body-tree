@@ -19,17 +19,18 @@ export class HandWind {
       !position.every(Number.isFinite)
     ) {
       this.target = zero();
+      this.wristSpeed = 0;
       return;
     }
     // Use time since this hand was last accepted, including short missing samples.
     if (dt > 0 && Number.isFinite(this.age))
-      dt = Math.max(dt, Math.min(this.age, 0.25));
+      dt = Math.max(dt, Math.min(this.age, 1));
     const raw = position.map((v) => clamp(v, -SPACE_SIZE / 2, SPACE_SIZE / 2));
-    let fresh = !this.previous || this.age > 0.25 || dt <= 0 || dt > 0.25;
+    let fresh = !this.previous || this.age > 1 || dt <= 0 || dt > 1;
     if (
       !fresh &&
       Math.hypot(...raw.map((v, i) => v - this.previous[i])) >
-        Math.max(1.5, dt * 40)
+        Math.max(1.5, Math.min(dt, 0.25) * 40)
     ) {
       this.rejected++;
       this.jumpCount =
@@ -56,6 +57,7 @@ export class HandWind {
     );
     let target = this.position.map((v, i) => (fresh ? 0 : (v - old[i]) / dt));
     const speed = Math.hypot(...target);
+    this.wristSpeed = speed;
     if (speed < (c.handSpeedThreshold ?? 0.15)) target = zero();
     else if (speed > 20) target = target.map((v) => (v * 20) / speed);
     if (!fresh) {
@@ -73,6 +75,7 @@ export class HandWind {
   }
   update(dt, c) {
     this.age += dt;
+    if (this.age > 0.25) this.wristSpeed = 0;
     const active = c[this.side] && this.age <= 0.25;
     const alpha =
       1 - Math.exp(-dt / (0.02 + (c.handSmoothing ?? 30) * 0.00333));
@@ -92,8 +95,10 @@ export class HandWind {
         (z - this.position[2]) ** 2;
     if (r2 > radius * radius) return out;
     const weight =
-      (Math.exp(-r2 / (2 * (radius / 2) ** 2)) * c[this.side + "Sensitivity"]) /
-      100;
+      ((Math.exp(-r2 / (2 * (radius / 2) ** 2)) *
+        c[this.side + "Sensitivity"]) /
+        100) *
+      ((c.handGain ?? 100) / 100);
     for (let i = 0; i < 3; i++) out[i] = this.velocity[i] * weight;
     return out;
   }

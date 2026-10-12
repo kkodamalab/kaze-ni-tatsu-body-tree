@@ -1,3 +1,4 @@
+import { RESPONSE_PRESETS, responseName } from "./WindResponse.js";
 export const SPACE_SIZE = 20;
 export const DEFAULTS = Object.freeze({
   gridX: 10,
@@ -18,19 +19,14 @@ export const DEFAULTS = Object.freeze({
   direction: 0,
   windSpeed: 3,
   body: true,
-  bodySensitivity: 100,
-  bodySmoothing: 30,
-  bodyDeadZone: 2,
-  handSpeedThreshold: 0.15,
-  handSmoothing: 30,
   left: true,
   right: true,
-  leftSensitivity: 100,
-  rightSensitivity: 100,
-  handRadius: 20,
   handDebug: false,
+  ...RESPONSE_PRESETS.NORMAL,
+  responsePreset: "NORMAL",
 });
 export const RANGES = Object.freeze({
+  handGain: [0, 500, 1],
   avatarSize: [20, 300, 1],
   gridX: [3, 20, 1],
   gridY: [3, 20, 1],
@@ -45,7 +41,7 @@ export const RANGES = Object.freeze({
   bodySensitivity: [0, 300, 1],
   bodySmoothing: [0, 100, 1],
   bodyDeadZone: [0, 15, 0.1],
-  handSpeedThreshold: [0, 3, 0.05],
+  handSpeedThreshold: [0, 3, 0.01],
   handSmoothing: [0, 100, 1],
   leftSensitivity: [0, 300, 1],
   rightSensitivity: [0, 300, 1],
@@ -58,6 +54,8 @@ export function sanitizeConfig(source = {}) {
     const v = source?.[key];
     if (typeof c[key] === "boolean") {
       if (typeof v === "boolean") c[key] = v;
+    } else if (key === "responsePreset") {
+      if (["SOFT", "NORMAL", "STRONG", "CUSTOM"].includes(v)) c[key] = v;
     } else if (key === "avatarStyle") {
       if (["SKELETON", "POINTS"].includes(v)) c[key] = v;
     } else if (typeof v === "number" && Number.isFinite(v)) {
@@ -66,14 +64,34 @@ export function sanitizeConfig(source = {}) {
       if (step === 1) c[key] = Math.round(c[key]);
     }
   }
+  if (c.responsePreset !== "CUSTOM") c.responsePreset = responseName(c);
   return c;
 }
 export class WindConfig {
   constructor(storage) {
     this.storage = storage;
     try {
+      const saved = JSON.parse(storage?.getItem(STORAGE_KEY) || "null");
       this.values = sanitizeConfig(
-        JSON.parse(storage?.getItem(STORAGE_KEY) || "{}"),
+        saved
+          ? {
+              ...(!saved.responsePreset
+                ? {
+                    bodySensitivity: 100,
+                    bodyDeadZone: 2,
+                    bodySmoothing: 30,
+                    leftSensitivity: 100,
+                    rightSensitivity: 100,
+                    handSpeedThreshold: 0.15,
+                    handSmoothing: 30,
+                    handRadius: 20,
+                  }
+                : {}),
+              ...saved,
+              handGain: saved.handGain ?? 100,
+              responsePreset: saved.responsePreset || "CUSTOM",
+            }
+          : {},
       );
     } catch {
       this.values = { ...DEFAULTS };

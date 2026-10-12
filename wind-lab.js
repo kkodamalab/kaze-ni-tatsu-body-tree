@@ -1,3 +1,8 @@
+import {
+  RESPONSE_PRESETS,
+  RESPONSE_KEYS,
+} from "./src/wind-engine/WindResponse.js";
+import { WIND_COLORS } from "./src/wind-engine/WindColors.js";
 import * as THREE from "./vendor/three/three.module.js";
 import { OrbitControls } from "./vendor/three/OrbitControls.js";
 import { WindConfig, RANGES } from "./src/wind-engine/WindConfig.js";
@@ -51,6 +56,7 @@ const groups = {
     ["leftSensitivity", "LEFT SENSITIVITY %"],
     ["rightSensitivity", "RIGHT SENSITIVITY %"],
     ["handRadius", "HAND RADIUS %"],
+    ["handGain", "HAND WIND GAIN %"],
     ["handSpeedThreshold", "HAND SPEED THRESHOLD units/s"],
     ["handSmoothing", "HAND SMOOTHING %"],
     ["handDebug", "HAND FIELD DEBUG"],
@@ -153,13 +159,15 @@ export class WindLab {
   }
   mount() {
     const c = this.store.values;
-    const settings = Object.entries(groups)
-      .map(
-        ([name, fields]) =>
-          `<fieldset><legend>${name}</legend>${name === "WEATHER" ? `<p>位置情報をOpen-Meteoへ送信して、周辺の大まかな風を表示します。正確な位置は保存しません。</p><button id="labGps">現在地の風を取得 / GPS WEATHER</button><p>MANUAL LOCATION：デモ地点は南大沢周辺（現在地ではありません）。座標は保存しません。</p><label>緯度 <input id="labLatitude" type="number" min="-90" max="90" step="any" value="35.61"></label><label>経度 <input id="labLongitude" type="number" min="-180" max="180" step="any" value="139.38"></label><button id="labManual">手動地点の風を取得</button><button id="labSimulated">SIMULATED WIND</button><p><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>（予測値）</p>` : ""}${fields.map(([key, label]) => (typeof c[key] === "boolean" ? `<label><input id="lab-${key}" data-key="${key}" type="checkbox" ${c[key] ? "checked" : ""}> ${label}</label>` : `<label for="lab-${key}">${label}<output id="lab-value-${key}">${c[key]}</output><input id="lab-${key}" data-key="${key}" type="range" min="${RANGES[key][0]}" max="${RANGES[key][1]}" step="${RANGES[key][2]}" value="${c[key]}"></label>`)).join("")}${name === "AVATAR" ? `<label><input id="lab-avatar-axes" data-key="axes" type="checkbox" ${c.axes ? "checked" : ""}> XYZ AXIS</label><label for="lab-avatarStyle">AVATAR STYLE<select id="lab-avatarStyle" data-key="avatarStyle"><option value="SKELETON" ${c.avatarStyle === "SKELETON" ? "selected" : ""}>SKELETON</option><option value="POINTS" ${c.avatarStyle === "POINTS" ? "selected" : ""}>POINTS</option></select></label><p>腰中心の表示用骨格。推定奥行きは目安です。手首は風の中心に固定。サイズは胴体などの表示倍率を変え、風の位置・半径は変更しません。</p>` : ""}${name === "PARTICLES" ? '<button id="labResetParticles">PARTICLE RESET</button><button id="labResetView">CAMERA VIEW RESET</button>' : ""}${name === "BODY" ? '<button id="labCalibrate">CALIBRATE</button><p>現在の姿勢をニュートラルにします。奥行きは単眼推定の目安です。</p>' : ""}</fieldset>`,
-      )
-      .join("");
-    this.root.innerHTML = `<header class="lab-header"><h1>3D WIND LAB</h1><nav aria-label="DISPLAY MODE">${["DOT", "KIDS", "ART"].map((mode) => `<button data-mode="${mode}" aria-pressed="${mode === "DOT"}">${mode}</button>`).join("")}</nav><div class="lab-weather"><p id="labWeatherStatus" class="lab-status" role="status"></p><small id="labWeatherDetails"></small></div><div><button id="labCamera" aria-pressed="false">CAMERA OFF</button><button id="labSkeleton" aria-pressed="false">SKELETON OFF</button><button id="labPc" aria-pressed="true">PC TEST ON</button><button id="labExit">ゲームに戻る</button></div></header><div id="labMessage" class="lab-toast" role="status"></div><div class="lab-layout"><div class="lab-stage"><div class="lab-preview hidden"><canvas id="labSkeletonCanvas"></canvas></div><pre id="labAvatarStatus" class="lab-avatar-status" role="status" hidden></pre><div class="lab-caption">ドラッグ / タッチで回転・ピンチでズーム<br>+X 東（右） / +Y 上 / -Z 北（奥）<br>緑 = 左手 / 橙 = 右手</div></div><aside class="lab-settings">${settings}<fieldset id="labPcPanel"><legend>PC TEST</legend><label>合成33点Pose<select id="labPoseTest"><option value="">MANUAL / AUTO MOTION</option>${Object.entries(
+    const settings =
+      `<fieldset><legend>WIND RESPONSE</legend><label for="lab-responsePreset">反応プリセット</label><select id="lab-responsePreset"><option>SOFT</option><option selected>NORMAL</option><option>STRONG</option><option>CUSTOM</option></select><p>左手 = マゼンタ / 右手 = アンバー / 骨格 = シアン</p></fieldset>` +
+      Object.entries(groups)
+        .map(
+          ([name, fields]) =>
+            `<fieldset><legend>${name}</legend>${name === "WEATHER" ? `<p>位置情報をOpen-Meteoへ送信して、周辺の大まかな風を表示します。正確な位置は保存しません。</p><button id="labGps">現在地の風を取得 / GPS WEATHER</button><p>MANUAL LOCATION：デモ地点は南大沢周辺（現在地ではありません）。座標は保存しません。</p><label>緯度 <input id="labLatitude" type="number" min="-90" max="90" step="any" value="35.61"></label><label>経度 <input id="labLongitude" type="number" min="-180" max="180" step="any" value="139.38"></label><button id="labManual">手動地点の風を取得</button><button id="labSimulated">SIMULATED WIND</button><p><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>（予測値）</p>` : ""}${fields.map(([key, label]) => (typeof c[key] === "boolean" ? `<label><input id="lab-${key}" data-key="${key}" type="checkbox" ${c[key] ? "checked" : ""}> ${label}</label>` : `<label for="lab-${key}">${label}<output id="lab-value-${key}">${c[key]}</output><input id="lab-${key}" data-key="${key}" type="range" min="${RANGES[key][0]}" max="${RANGES[key][1]}" step="${RANGES[key][2]}" value="${c[key]}"></label>`)).join("")}${name === "AVATAR" ? `<label><input id="lab-avatar-axes" data-key="axes" type="checkbox" ${c.axes ? "checked" : ""}> XYZ AXIS</label><label for="lab-avatarStyle">AVATAR STYLE<select id="lab-avatarStyle" data-key="avatarStyle"><option value="SKELETON" ${c.avatarStyle === "SKELETON" ? "selected" : ""}>SKELETON</option><option value="POINTS" ${c.avatarStyle === "POINTS" ? "selected" : ""}>POINTS</option></select></label><p>腰中心の表示用骨格。推定奥行きは目安です。手首は風の中心に固定。サイズは胴体などの表示倍率を変え、風の位置・半径は変更しません。</p>` : ""}${name === "PARTICLES" ? '<button id="labResetParticles">PARTICLE RESET</button><button id="labResetView">CAMERA VIEW RESET</button>' : ""}${name === "BODY" ? '<button id="labCalibrate">CALIBRATE</button><p>現在の姿勢をニュートラルにします。奥行きは単眼推定の目安です。</p>' : ""}</fieldset>`,
+        )
+        .join("");
+    this.root.innerHTML = `<header class="lab-header"><h1>3D WIND LAB</h1><nav aria-label="DISPLAY MODE">${["DOT", "KIDS", "ART"].map((mode) => `<button data-mode="${mode}" aria-pressed="${mode === "DOT"}">${mode}</button>`).join("")}</nav><div class="lab-weather"><p id="labWeatherStatus" class="lab-status" role="status"></p><small id="labWeatherDetails"></small></div><div><button id="labCamera" aria-pressed="false">CAMERA OFF</button><button id="labSkeleton" aria-pressed="false">SKELETON OFF</button><button id="labPc" aria-pressed="true">PC TEST ON</button><button id="labExit">ゲームに戻る</button></div></header><div id="labMessage" class="lab-toast" role="status"></div><div class="lab-layout"><div class="lab-stage"><div class="lab-preview hidden"><canvas id="labSkeletonCanvas"></canvas></div><pre id="labAvatarStatus" class="lab-avatar-status" role="status" hidden></pre><div class="lab-caption">ドラッグ / タッチで回転・ピンチでズーム<br>+X 東（右） / +Y 上 / -Z 北（奥）<br>マゼンタ = 左手 / アンバー = 右手</div></div><aside class="lab-settings">${settings}<fieldset id="labPcPanel"><legend>PC TEST</legend><label>合成33点Pose<select id="labPoseTest"><option value="">MANUAL / AUTO MOTION</option>${Object.entries(
       POSE_TESTS,
     )
       .map(
@@ -181,6 +189,15 @@ export class WindLab {
       .forEach(
         (button) => (button.onclick = () => this.setMode(button.dataset.mode)),
       );
+    this.$("#lab-responsePreset").value = c.responsePreset;
+    this.$("#lab-responsePreset").addEventListener("change", (event) => {
+      const name = event.target.value;
+      this.apply({
+        ...this.store.values,
+        ...(RESPONSE_PRESETS[name] || {}),
+        responsePreset: name,
+      });
+    });
     this.stage = this.$(".lab-stage");
     this.preview = this.$(".lab-preview");
     this.preview.prepend(this.video);
@@ -193,7 +210,11 @@ export class WindLab {
             : input.tagName === "SELECT"
               ? input.value
               : Number(input.value);
-        this.apply({ ...this.store.values, [key]: value });
+        this.apply({
+          ...this.store.values,
+          [key]: value,
+          ...(RESPONSE_KEYS.includes(key) ? { responsePreset: "CUSTOM" } : {}),
+        });
         if (["direction", "windSpeed"].includes(key))
           this.weather.simulated(
             this.engine.config.direction,
@@ -314,6 +335,7 @@ export class WindLab {
     const previous = this.engine.positions;
     this.store.replace(config);
     this.engine.configure(this.store.values);
+    this.$("#lab-responsePreset").value = this.store.values.responsePreset;
     if (previous !== this.engine.positions) this.field?.rebuild();
     else this.field?.drawHistory();
     for (const [key, value] of Object.entries(this.store.values)) {
@@ -524,12 +546,8 @@ export class WindLab {
       this.debug.weatherArrow.visible = false;
     }
     this.avatar.update(t, dt, this.engine.config, this.engine);
-    this.avatar.lineMaterial.color.setHex(
-      this.mode === "KIDS" ? 0x087f96 : 0x57eaff,
-    );
-    this.avatar.jointMaterial.color.setHex(
-      this.mode === "KIDS" ? 0x004c62 : 0xf4ffff,
-    );
+    this.avatar.lineMaterial.color.setHex(WIND_COLORS.skeleton);
+    this.avatar.jointMaterial.color.setHex(0xffffff);
     this.controls.update();
     this.renderer.render(this.scene, this.view);
     if (t - (this.lastDebug || 0) > 200) {

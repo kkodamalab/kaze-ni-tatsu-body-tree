@@ -29,6 +29,15 @@ export class WindEngine {
           this.positions[i++] = (z / (c.gridZ - 1) - 0.5) * SPACE_SIZE * 0.9;
         }
     this.time = 0;
+    this.motionWindow = [];
+    this.motion = {
+      meanSpeed: 0,
+      meanDisplacement: 0,
+      displacement1s: 0,
+      leftCount: 0,
+      rightCount: 0,
+      appliedWindMagnitude: 0,
+    };
   }
   configure(config) {
     const old = this.config;
@@ -57,11 +66,14 @@ export class WindEngine {
   step(elapsed) {
     if (!Number.isFinite(elapsed) || elapsed <= 0) return;
     let remaining = Math.min(elapsed, 0.1);
+    let frameDistance = 0;
     while (remaining > 1e-8) {
       const dt = Math.min(remaining, 1 / 60);
       this.integrate(dt);
+      frameDistance += this.motion.meanDisplacement;
       remaining -= dt;
     }
+    this.motion.meanDisplacement = frameDistance;
   }
   integrate(dt) {
     const c = this.config,
@@ -81,11 +93,37 @@ export class WindEngine {
       a = 1 - Math.exp(-this.damping * dt);
     const p = this.positions,
       v = this.velocities;
+    let sumSpeed = 0,
+      sumDistance = 0,
+      sumWind = 0,
+      leftCount = 0,
+      rightCount = 0;
+    const radius2 = ((SPACE_SIZE * c.handRadius) / 100) ** 2;
     for (let j = 0; j < p.length; j += 3) {
       this.left.at(p[j], p[j + 1], p[j + 2], c, l);
       this.right.at(p[j], p[j + 1], p[j + 2], c, r);
       for (let k = 0; k < 3; k++)
         target[k] = ((w[k] + b[k] + l[k] + r[k]) * c.speed) / 100;
+      const lp = this.left.position,
+        rp = this.right.position;
+      if (
+        c.left &&
+        lp &&
+        (p[j] - lp[0]) ** 2 +
+          (p[j + 1] - lp[1]) ** 2 +
+          (p[j + 2] - lp[2]) ** 2 <=
+          radius2
+      )
+        leftCount++;
+      if (
+        c.right &&
+        rp &&
+        (p[j] - rp[0]) ** 2 +
+          (p[j + 1] - rp[1]) ** 2 +
+          (p[j + 2] - rp[2]) ** 2 <=
+          radius2
+      )
+        rightCount++;
       const magnitude = Math.hypot(...target),
         scale = magnitude > this.maxSpeed ? this.maxSpeed / magnitude : 1;
       for (let k = 0; k < 3; k++)
@@ -93,15 +131,41 @@ export class WindEngine {
       const speed = Math.hypot(v[j], v[j + 1], v[j + 2]);
       if (speed > this.maxSpeed)
         for (let k = 0; k < 3; k++) v[j + k] *= this.maxSpeed / speed;
+      sumSpeed += Math.min(speed, this.maxSpeed);
+      sumWind += Math.min(magnitude, this.maxSpeed);
+      let distance2 = 0;
       for (let k = 0; k < 3; k++) {
+        const before = p[j + k];
         p[j + k] += v[j + k] * dt;
         p[j + k] =
           ((((p[j + k] + SPACE_SIZE / 2) % SPACE_SIZE) + SPACE_SIZE) %
             SPACE_SIZE) -
           SPACE_SIZE / 2;
+        const delta = Math.abs(p[j + k] - before);
+        distance2 += Math.min(delta, SPACE_SIZE - delta) ** 2;
       }
+      sumDistance += Math.sqrt(distance2);
     }
     this.time += dt;
+    const distance = sumDistance / this.count;
+    this.motionWindow.push({ time: this.time, dt, distance });
+    while (this.motionWindow[0]?.time <= this.time - 1)
+      this.motionWindow.shift();
+    const displacement1s = this.motionWindow.reduce(
+      (sum, entry) =>
+        sum +
+        entry.distance *
+          Math.min(1, Math.max(0, (entry.time - (this.time - 1)) / entry.dt)),
+      0,
+    );
+    this.motion = {
+      meanSpeed: sumSpeed / this.count,
+      meanDisplacement: distance,
+      displacement1s,
+      leftCount,
+      rightCount,
+      appliedWindMagnitude: sumWind / this.count,
+    };
   }
   dispose() {
     this.weather.dispose();

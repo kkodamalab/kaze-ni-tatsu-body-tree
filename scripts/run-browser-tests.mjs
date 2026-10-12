@@ -8,6 +8,7 @@ const suites = [
   "modes-play-browser",
   "avatar-browser",
   "phase5-browser",
+  "home-response-browser",
 ];
 for (const suite of suites) {
   const path = `tests/${suite}.mjs`,

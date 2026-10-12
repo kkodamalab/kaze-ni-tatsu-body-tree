@@ -1,6 +1,13 @@
+import { WIND_COLORS } from "../wind-engine/WindColors.js";
 import * as THREE from "../../vendor/three/three.module.js";
 import { SPACE_SIZE } from "../wind-engine/WindConfig.js";
 import { POSE_CONNECTIONS } from "./PoseConnections.js";
+const jointColors = Object.fromEntries(
+  Object.entries(WIND_COLORS).map(([key, color]) => [
+    key,
+    new THREE.Color(color).toArray(),
+  ]),
+);
 export class SkeletonAvatar {
   constructor(scene) {
     this.scene = scene;
@@ -50,7 +57,7 @@ export class SkeletonAvatar {
       depthWrite: false,
     });
     this.lineMaterial = new THREE.LineBasicMaterial({
-      color: 0x57eaff,
+      color: WIND_COLORS.skeleton,
       transparent: true,
       depthTest: false,
       depthWrite: false,
@@ -136,7 +143,11 @@ export class SkeletonAvatar {
           this.jointBuffer[count * 3 + k] = v;
         }
         this.colors.set(
-          i === 15 ? [0.2, 1, 0.65] : i === 16 ? [1, 0.6, 0.25] : [1, 1, 1],
+          i === 15
+            ? jointColors.left
+            : i === 16
+              ? jointColors.right
+              : jointColors.skeleton,
           count * 3,
         );
         count++;

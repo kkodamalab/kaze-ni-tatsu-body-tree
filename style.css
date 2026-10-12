@@ -352,3 +352,137 @@ button:disabled {
   :is(#hud, #skeletonToggle, #skeletonHud, #researchToggle, #photoStatus) {
   display: none;
 }
+
+/* Home uses the page scroll, never an independently scrolling card. */
+html:has(#start:not(.hidden)),
+body:has(#start:not(.hidden)) {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+}
+#app:has(#start:not(.hidden)) {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  background: #f2f4e9;
+}
+#app:has(#start:not(.hidden)) #world {
+  position: fixed;
+  opacity: 0.12;
+  pointer-events: none;
+}
+#app:has(#start:not(.hidden)) #camera {
+  display: none;
+}
+#start {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  margin: 0 auto;
+  width: min(92%, 620px);
+  max-height: none;
+  overflow: visible;
+  padding: 56px 24px 40px;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+#start h1 {
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 12px 0 20px;
+}
+#start .home-eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  color: #527360;
+}
+#start .home-description {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.9;
+  color: #4e6456;
+}
+#start .home-duration {
+  text-align: left;
+  max-width: 360px;
+  margin: 28px auto 16px;
+  font-size: 14px;
+}
+#startBtn {
+  display: block;
+  width: min(100%, 360px);
+  margin: 12px auto;
+  border-radius: 12px;
+  min-height: 58px;
+  font-size: 18px;
+  background: #225c44;
+}
+#start .home-other {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+#start .home-other button {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+  background: transparent;
+  color: #225c44;
+  border-radius: 8px;
+  min-height: 44px;
+}
+#start .hint {
+  font-size: 12px;
+  font-weight: 400;
+  color: #536957;
+  line-height: 1.7;
+}
+#homeDetails {
+  margin: 24px auto 0;
+  text-align: left;
+  max-width: 440px;
+}
+#homeDetails summary {
+  cursor: pointer;
+  padding: 14px 0;
+  min-height: 44px;
+  color: #345c45;
+}
+#homeDetails .settings {
+  border: 0;
+  border-radius: 0;
+  margin: 12px 0;
+  padding: 12px 0;
+}
+#homeDetails legend {
+  font-size: 13px;
+  font-weight: 600;
+}
+#homeDetails label {
+  font-size: 14px;
+  line-height: 1.8;
+}
+#homeDetails input[type="checkbox"] {
+  accent-color: #225c44;
+  min-width: 18px;
+  min-height: 18px;
+}
+@media (max-width: 600px) {
+  #start {
+    padding: 32px 10px;
+  }
+  #start h1 {
+    font-size: 29px;
+  }
+  .home-other {
+    gap: 4px !important;
+  }
+}
+#start input[type="range"] {
+  accent-color: #225c44;
+}
