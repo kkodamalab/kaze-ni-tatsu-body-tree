@@ -86,7 +86,7 @@ export class SkeletonAvatar {
     this.opacity = 0;
     this.state = "LOST";
   }
-  update(now, dt, config) {
+  update(now, dt, config, hands) {
     if (this.disposed) return;
     this.config = config;
     const age =
@@ -127,6 +127,34 @@ export class SkeletonAvatar {
         );
         count++;
       }
+    // Wrist anchors are accepted physical positions, independent of display size/smoothing.
+    if (hands)
+      for (const [side, index, fingers] of [
+        ["left", 15, [17, 19, 21]],
+        ["right", 16, [18, 20, 22]],
+      ]) {
+        const anchor = hands[side]?.position;
+        if (!anchor || !this.valid[index]) continue;
+        const offset = anchor.map((v, k) => v - this.rendered[index * 3 + k]);
+        this.rendered.set(anchor, index * 3);
+        for (const finger of fingers)
+          if (this.valid[finger])
+            for (let k = 0; k < 3; k++)
+              this.rendered[finger * 3 + k] = Math.max(
+                -10,
+                Math.min(10, this.rendered[finger * 3 + k] + offset[k]),
+              );
+      }
+    // Repack after anchoring so Points and lines use exactly the same coordinates.
+    let packed = 0;
+    for (let i = 0; i < 33; i++)
+      if (this.valid[i]) {
+        this.jointBuffer.set(
+          this.rendered.subarray(i * 3, i * 3 + 3),
+          packed * 3,
+        );
+        packed++;
+      }
     let lines = 0;
     for (const [a, b] of POSE_CONNECTIONS)
       if (this.valid[a] && this.valid[b]) {
@@ -150,7 +178,7 @@ export class SkeletonAvatar {
   }
   text() {
     const f = (v) => (v ? v.map((n) => n.toFixed(2)).join(", ") : "—");
-    return `3D AVATAR ${this.config?.avatar ? "ON" : "OFF"} | ${this.config?.avatarSize || 100}% / ${this.config?.avatarStyle || "SKELETON"}\nAVATAR INPUT ${this.source} | ${this.state || "LOST"} | VALID ${this.validCount || 0}/33 | HELD ${this.heldCount || 0}/33\nAVATAR display scale ${(this.displayScale || 1).toFixed(2)} (visual only)\nAVATAR LEFT wrist (${f(this.wrist("left"))})\nAVATAR RIGHT wrist (${f(this.wrist("right"))})\nPOSE avatar: hip origin / normalized; wind hands: camera origin. PC TEST at 100%: same wrist positions before fitting.`;
+    return `3D AVATAR ${this.config?.avatar ? "ON" : "OFF"} | ${this.config?.avatarSize || 100}% / ${this.config?.avatarStyle || "SKELETON"}\nAVATAR INPUT ${this.source} | ${this.state || "LOST"} | VALID ${this.validCount || 0}/33 | HELD ${this.heldCount || 0}/33\nAVATAR display scale ${(this.displayScale || 1).toFixed(2)} (visual only)\nAVATAR LEFT wrist (${f(this.wrist("left"))})\nAVATAR RIGHT wrist (${f(this.wrist("right"))})\nHip-centered shared coordinates. Wrist anchors = accepted HandWind positions at every display size.`;
   }
   dispose() {
     if (this.disposed) return;

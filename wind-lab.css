@@ -276,7 +276,6 @@
   color: #423924;
   border-color: #b79a58;
 }
-#windLab[data-display-mode="KIDS"] .lab-debug,
 #windLab[data-display-mode="KIDS"] .lab-caption {
   display: none;
 }

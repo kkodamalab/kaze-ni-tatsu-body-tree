@@ -89,6 +89,11 @@ try {
     {},
     { timeout: 15000 },
   );
+  await page.waitForFunction(
+    () => liveLab.pose.result?.timestamp > 0,
+    {},
+    { timeout: 15000 },
+  );
   assert.ok(
     await page.evaluate(
       () => liveLab.pose && liveLab.stream.getVideoTracks().length === 1,

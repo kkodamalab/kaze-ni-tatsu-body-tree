@@ -46,8 +46,8 @@ export class WindEngine {
     const dt = this.inputTime === null ? 0 : (time - this.inputTime) / 1000;
     this.inputTime = time;
     this.body.input(sample?.body, dt);
-    this.left.input(sample?.left, dt);
-    this.right.input(sample?.right, dt);
+    this.left.input(sample?.left, dt, this.config);
+    this.right.input(sample?.right, dt, this.config);
   }
   suspend() {
     this.inputTime = null;

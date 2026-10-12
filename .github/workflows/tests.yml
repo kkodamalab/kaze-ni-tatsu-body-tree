@@ -36,3 +36,4 @@ jobs:
           node tests/pose-lab-browser.mjs
           node tests/modes-play-browser.mjs
           node tests/avatar-browser.mjs
+          node tests/phase5-browser.mjs

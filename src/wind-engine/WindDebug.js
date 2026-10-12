@@ -5,7 +5,7 @@ export class WindDebug {
     this.scene = scene;
     this.axes = new THREE.AxesHelper(12);
     scene.add(this.axes);
-    this.spheres = [0x56e2be, 0xffa56b].map((color) => {
+    this.spheres = [0x57eaff, 0xffa56b].map((color) => {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(1, 16, 10),
         new THREE.MeshBasicMaterial({
@@ -18,6 +18,32 @@ export class WindDebug {
       );
       scene.add(mesh);
       return mesh;
+    });
+    this.handMarkers = [0x57eaff, 0xffa56b].map((color) => {
+      const m = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 8, 6),
+        new THREE.MeshBasicMaterial({ color, depthTest: false }),
+      );
+      m.renderOrder = 35;
+      scene.add(m);
+      return m;
+    });
+    this.handArrows = [0x57eaff, 0xffa56b].map((color) => {
+      const a = new THREE.ArrowHelper(
+        new THREE.Vector3(1, 0, 0),
+        new THREE.Vector3(),
+        1,
+        color,
+      );
+      a.traverse((o) => {
+        if (o.material) {
+          o.material.depthTest = false;
+          o.material.depthWrite = false;
+        }
+        o.renderOrder = 34;
+      });
+      scene.add(a);
+      return a;
     });
     this.weatherArrow = new THREE.ArrowHelper(
       new THREE.Vector3(0, 0, 1),
@@ -34,7 +60,21 @@ export class WindDebug {
       const s = this.spheres[i];
       s.visible =
         c.handDebug && c[h.side] && h.position !== null && h.age < 0.3;
-      if (h.position) s.position.set(...h.position);
+      const marker = this.handMarkers[i],
+        arrow = this.handArrows[i];
+      marker.visible = s.visible;
+      if (h.position) {
+        s.position.set(...h.position);
+        marker.position.set(...h.position);
+        arrow.position.set(...h.position);
+      }
+      const wind = h.position ? h.at(...h.position, c) : [0, 0, 0],
+        length = Math.hypot(...wind);
+      arrow.visible = s.visible && length > 0.01;
+      if (arrow.visible) {
+        arrow.setDirection(new THREE.Vector3(...wind).normalize());
+        arrow.setLength(Math.min(6, length));
+      }
       s.scale.setScalar((SPACE_SIZE * c.handRadius) / 100);
     });
     const v = engine.components?.weather || [0, 0, 0];
@@ -58,7 +98,13 @@ export class WindDebug {
     return `${engine.count} particles | +X EAST / +Y UP / -Z NORTH\nPOSE ${engine.body.age <= 0.25 ? "DETECTED" : "LOST"} | LANDMARKS ${metrics.landmarkCount || 0}/33\nINFERENCE FPS ${(metrics.poseFps || 0).toFixed(1)} | RENDER FPS ${(metrics.renderFps || 0).toFixed(1)}\nBODY AXIS XYZ (${f(engine.body.raw || [0, 0, 0])})\nWEATHER (${f(components.weather)})\nBODY (${f(components.body)}) ${engine.body.age <= 0.25 ? "DETECTED" : "LOST"}\nLEFT position (${position(engine.left)}) | velocity (${f(components.left)})\nLEFT field at hand (${local(engine.left)}) ${engine.left.age <= 0.25 ? "DETECTED" : "LOST"}\nRIGHT position (${position(engine.right)}) | velocity (${f(components.right)})\nRIGHT field at hand (${local(engine.right)}) ${engine.right.age <= 0.25 ? "DETECTED" : "LOST"}\nMAX SPEED ${engine.maxSpeed} units/s | WRAP`;
   }
   dispose() {
-    for (const obj of [this.axes, ...this.spheres, this.weatherArrow]) {
+    for (const obj of [
+      this.axes,
+      ...this.spheres,
+      ...this.handMarkers,
+      ...this.handArrows,
+      this.weatherArrow,
+    ]) {
       this.scene.remove(obj);
       obj.traverse((child) => {
         child.geometry?.dispose();

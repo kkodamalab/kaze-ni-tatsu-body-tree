@@ -3,6 +3,7 @@ import { validDuration } from "../../trial.mjs";
 import { PhotoSession } from "../../photos.mjs";
 import { PhotoUI } from "../../photo-ui.mjs";
 import { FaceCapture } from "../../face-capture.mjs";
+import { trackingSnapshot } from "./TrackingReport.js";
 export class LabPlay {
   constructor(lab, initialDuration = 30) {
     this.lab = lab;
@@ -184,6 +185,7 @@ export class LabPlay {
       const e = this.lab.engine;
       if (this.rows.length >= 6000) this.rows.shift();
       this.rows.push({
+        ...trackingSnapshot(e, this.lab.diagnostics, this.lab.avatar),
         elapsedSec: (state.elapsedMs / 1000).toFixed(3),
         configuredDurationSec: state.durationSec,
         growth: state.growth.toFixed(4),

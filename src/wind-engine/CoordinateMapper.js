@@ -27,8 +27,7 @@ export class CoordinateMapper {
       clamp(Number.isFinite(p.z) ? p.z : 0, -0.5, 0.5) * this.size,
     ];
   }
-  // Display-space adapter: same mirror/axis convention as point(), with hip origin.
-  // Wind positions deliberately retain the existing camera-space mapping.
+  // One hip-centered coordinate frame for avatar and physical hand input.
   avatarPose(landmarks, worldLandmarks) {
     const lm = landmarks || [];
     if (![23, 24].every((i) => validLandmark(lm[i]))) return null;
@@ -62,20 +61,21 @@ export class CoordinateMapper {
       this.avatarReference = { source, extent };
     const reference = this.avatarReference.extent;
     const scale = (this.size * 0.15) / reference;
+    const mappedPoints = points.map((p) =>
+      p
+        ? [
+            p[0] * scale,
+            p[1] * scale,
+            clamp(p[2], -reference * 0.7, reference * 0.7) * scale,
+          ]
+        : null,
+    );
     return {
-      points: points.map((p) =>
-        p
-          ? [
-              p[0] * scale,
-              p[1] * scale,
-              clamp(p[2], -reference * 0.7, reference * 0.7) * scale,
-            ]
-          : null,
-      ),
+      points: mappedPoints,
       source,
       windHands: {
-        left: validLandmark(lm[15]) ? this.point(lm[15]) : null,
-        right: validLandmark(lm[16]) ? this.point(lm[16]) : null,
+        left: mappedPoints[15],
+        right: mappedPoints[16],
       },
     };
   }
@@ -131,34 +131,23 @@ export class CoordinateMapper {
   }
   fromPose(landmarks, worldLandmarks) {
     const lm = landmarks || [];
+    const frame = this.avatarPose(lm, worldLandmarks);
     let body = null;
-    if ([11, 12, 23, 24].every((i) => validLandmark(lm[i]))) {
-      const avg = (a, b, k) => ((a[k] || 0) + (b[k] || 0)) / 2;
-      const sx = avg(lm[11], lm[12], "x"),
-        sy = avg(lm[11], lm[12], "y"),
-        hx = avg(lm[23], lm[24], "x"),
-        hy = avg(lm[23], lm[24], "y");
-      const height = Math.max(0.08, hy - sy);
-      const depth =
-        worldLandmarks &&
-        [11, 12, 23, 24].every((i) => validLandmark(worldLandmarks[i]))
-          ? worldLandmarks
-          : lm;
+    if (frame && [11, 12, 23, 24].every((i) => frame.points[i])) {
+      const shoulder = [0, 1, 2].map(
+        (k) => (frame.points[11][k] + frame.points[12][k]) / 2,
+      );
+      const height = Math.max(0.1, shoulder[1]);
       body = [
-        clamp((hx - sx) / height, -1, 1),
-        clamp((height - 0.3) * 2, -1, 1),
-        clamp(
-          (avg(depth[11], depth[12], "z") - avg(depth[23], depth[24], "z")) /
-            Math.max(0.2, depth === lm ? height : 0.5),
-          -1,
-          1,
-        ),
+        clamp(shoulder[0] / height, -1, 1),
+        0,
+        clamp(shoulder[2] / height, -1, 1),
       ];
     }
     return {
       body,
-      left: validLandmark(lm[15]) ? this.point(lm[15]) : null,
-      right: validLandmark(lm[16]) ? this.point(lm[16]) : null,
+      left: frame?.windHands.left || null,
+      right: frame?.windHands.right || null,
     };
   }
 }

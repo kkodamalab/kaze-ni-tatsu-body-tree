@@ -10,6 +10,12 @@ import { drawPoseOverlay } from "./src/wind-lab/PoseOverlay.js";
 import { SceneModes } from "./src/wind-lab/SceneModes.js";
 import { SkeletonAvatar } from "./src/wind-lab/SkeletonAvatar.js";
 import { LabPlay } from "./src/wind-lab/LabPlay.js";
+import {
+  trackingSnapshot,
+  trackingText,
+  downloadTrackingCsv,
+} from "./src/wind-lab/TrackingReport.js";
+import { POSE_TESTS, poseSequence } from "./src/wind-lab/PoseSequences.js";
 const groups = {
   AVATAR: [
     ["avatar", "3D AVATAR"],
@@ -37,6 +43,7 @@ const groups = {
     ["body", "BODY WIND ON"],
     ["bodySensitivity", "BODY SENSITIVITY %"],
     ["bodySmoothing", "BODY SMOOTHING %"],
+    ["bodyDeadZone", "BODY DEAD ZONE °"],
   ],
   HANDS: [
     ["left", "LEFT HAND ON"],
@@ -44,6 +51,8 @@ const groups = {
     ["leftSensitivity", "LEFT SENSITIVITY %"],
     ["rightSensitivity", "RIGHT SENSITIVITY %"],
     ["handRadius", "HAND RADIUS %"],
+    ["handSpeedThreshold", "HAND SPEED THRESHOLD units/s"],
+    ["handSmoothing", "HAND SMOOTHING %"],
     ["handDebug", "HAND FIELD DEBUG"],
   ],
 };
@@ -77,6 +86,7 @@ export class WindLab {
       windowStart: performance.now(),
       landmarkCount: 0,
     };
+    this.trackingRows = [];
     this.mode = "DOT";
     this.mount();
     this.weather = new WeatherWind({ onChange: () => this.weatherStatus() });
@@ -146,10 +156,18 @@ export class WindLab {
     const settings = Object.entries(groups)
       .map(
         ([name, fields]) =>
-          `<fieldset><legend>${name}</legend>${name === "WEATHER" ? `<p>位置情報をOpen-Meteoへ送信して、周辺の大まかな風を表示します。正確な位置は保存しません。</p><button id="labGps">現在地の風を取得 / GPS WEATHER</button><p>MANUAL LOCATION：デモ地点は南大沢周辺（現在地ではありません）。座標は保存しません。</p><label>緯度 <input id="labLatitude" type="number" min="-90" max="90" step="any" value="35.61"></label><label>経度 <input id="labLongitude" type="number" min="-180" max="180" step="any" value="139.38"></label><button id="labManual">手動地点の風を取得</button><button id="labSimulated">SIMULATED WIND</button><p><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>（予測値）</p>` : ""}${fields.map(([key, label]) => (typeof c[key] === "boolean" ? `<label><input id="lab-${key}" data-key="${key}" type="checkbox" ${c[key] ? "checked" : ""}> ${label}</label>` : `<label for="lab-${key}">${label}<output id="lab-value-${key}">${c[key]}</output><input id="lab-${key}" data-key="${key}" type="range" min="${RANGES[key][0]}" max="${RANGES[key][1]}" step="${RANGES[key][2]}" value="${c[key]}"></label>`)).join("")}${name === "AVATAR" ? `<label for="lab-avatarStyle">AVATAR STYLE<select id="lab-avatarStyle" data-key="avatarStyle"><option value="SKELETON" ${c.avatarStyle === "SKELETON" ? "selected" : ""}>SKELETON</option><option value="POINTS" ${c.avatarStyle === "POINTS" ? "selected" : ""}>POINTS</option></select></label><p>腰中心の表示用骨格。推定奥行きは目安です。サイズは風の強さ・発生位置を変更しません。</p>` : ""}${name === "PARTICLES" ? '<button id="labResetParticles">PARTICLE RESET</button><button id="labResetView">CAMERA VIEW RESET</button>' : ""}${name === "BODY" ? '<button id="labCalibrate">CALIBRATE</button><p>現在の姿勢をニュートラルにします。奥行きは単眼推定の目安です。</p>' : ""}</fieldset>`,
+          `<fieldset><legend>${name}</legend>${name === "WEATHER" ? `<p>位置情報をOpen-Meteoへ送信して、周辺の大まかな風を表示します。正確な位置は保存しません。</p><button id="labGps">現在地の風を取得 / GPS WEATHER</button><p>MANUAL LOCATION：デモ地点は南大沢周辺（現在地ではありません）。座標は保存しません。</p><label>緯度 <input id="labLatitude" type="number" min="-90" max="90" step="any" value="35.61"></label><label>経度 <input id="labLongitude" type="number" min="-180" max="180" step="any" value="139.38"></label><button id="labManual">手動地点の風を取得</button><button id="labSimulated">SIMULATED WIND</button><p><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a>（予測値）</p>` : ""}${fields.map(([key, label]) => (typeof c[key] === "boolean" ? `<label><input id="lab-${key}" data-key="${key}" type="checkbox" ${c[key] ? "checked" : ""}> ${label}</label>` : `<label for="lab-${key}">${label}<output id="lab-value-${key}">${c[key]}</output><input id="lab-${key}" data-key="${key}" type="range" min="${RANGES[key][0]}" max="${RANGES[key][1]}" step="${RANGES[key][2]}" value="${c[key]}"></label>`)).join("")}${name === "AVATAR" ? `<label for="lab-avatarStyle">AVATAR STYLE<select id="lab-avatarStyle" data-key="avatarStyle"><option value="SKELETON" ${c.avatarStyle === "SKELETON" ? "selected" : ""}>SKELETON</option><option value="POINTS" ${c.avatarStyle === "POINTS" ? "selected" : ""}>POINTS</option></select></label><p>腰中心の表示用骨格。推定奥行きは目安です。手首は風の中心に固定。サイズは胴体などの表示倍率を変え、風の位置・半径は変更しません。</p>` : ""}${name === "PARTICLES" ? '<button id="labResetParticles">PARTICLE RESET</button><button id="labResetView">CAMERA VIEW RESET</button>' : ""}${name === "BODY" ? '<button id="labCalibrate">CALIBRATE</button><p>現在の姿勢をニュートラルにします。奥行きは単眼推定の目安です。</p>' : ""}</fieldset>`,
       )
       .join("");
-    this.root.innerHTML = `<header class="lab-header"><h1>3D WIND LAB</h1><nav aria-label="DISPLAY MODE">${["DOT", "KIDS", "ART"].map((mode) => `<button data-mode="${mode}" aria-pressed="${mode === "DOT"}">${mode}</button>`).join("")}</nav><div class="lab-weather"><p id="labWeatherStatus" class="lab-status" role="status"></p><small id="labWeatherDetails"></small></div><div><button id="labCamera" aria-pressed="false">CAMERA OFF</button><button id="labSkeleton" aria-pressed="false">SKELETON OFF</button><button id="labPc" aria-pressed="true">PC TEST ON</button><button id="labExit">ゲームに戻る</button></div></header><div id="labMessage" class="lab-toast" role="status"></div><div class="lab-layout"><div class="lab-stage"><div class="lab-preview hidden"><canvas id="labSkeletonCanvas"></canvas></div><div class="lab-caption">ドラッグ / タッチで回転・ピンチでズーム<br>+X 東（右） / +Y 上 / -Z 北（奥）<br>緑 = 左手 / 橙 = 右手</div></div><aside class="lab-settings">${settings}<fieldset id="labPcPanel"><legend>PC TEST</legend><button id="labAuto" aria-pressed="false">AUTO MOTION OFF</button>${["body", "left", "right"].map((part) => ["X", "Y", "Z"].map((axis, i) => `<label>${part.toUpperCase()} ${axis}<output id="lab-value-test-${part}${axis}">${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}</output><input id="lab-test-${part}${axis}" type="range" min="${part === "body" ? -1 : -10}" max="${part === "body" ? 1 : 10}" step=".01" value="${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}"></label>`).join("")).join("")}</fieldset><fieldset class="lab-debug"><legend>DEBUG</legend>${["WEATHER ONLY", "BODY ONLY", "LEFT HAND ONLY", "RIGHT HAND ONLY", "ALL ON", "ALL OFF"].map((s, i) => `<button data-preset="${i}">${s}</button>`).join("")}<pre id="labDebug"></pre><button id="labResetSettings">RESET SETTINGS</button></fieldset></aside></div>`;
+    this.root.innerHTML = `<header class="lab-header"><h1>3D WIND LAB</h1><nav aria-label="DISPLAY MODE">${["DOT", "KIDS", "ART"].map((mode) => `<button data-mode="${mode}" aria-pressed="${mode === "DOT"}">${mode}</button>`).join("")}</nav><div class="lab-weather"><p id="labWeatherStatus" class="lab-status" role="status"></p><small id="labWeatherDetails"></small></div><div><button id="labCamera" aria-pressed="false">CAMERA OFF</button><button id="labSkeleton" aria-pressed="false">SKELETON OFF</button><button id="labPc" aria-pressed="true">PC TEST ON</button><button id="labExit">ゲームに戻る</button></div></header><div id="labMessage" class="lab-toast" role="status"></div><div class="lab-layout"><div class="lab-stage"><div class="lab-preview hidden"><canvas id="labSkeletonCanvas"></canvas></div><div class="lab-caption">ドラッグ / タッチで回転・ピンチでズーム<br>+X 東（右） / +Y 上 / -Z 北（奥）<br>緑 = 左手 / 橙 = 右手</div></div><aside class="lab-settings">${settings}<fieldset id="labPcPanel"><legend>PC TEST</legend><label>合成33点Pose<select id="labPoseTest"><option value="">MANUAL / AUTO MOTION</option>${Object.entries(
+      POSE_TESTS,
+    )
+      .map(
+        ([key, name]) => `<option value="${key}">TEST ${key}: ${name}</option>`,
+      )
+      .join(
+        "",
+      )}</select></label><button id="labAuto" aria-pressed="false">AUTO MOTION OFF</button>${["body", "left", "right"].map((part) => ["X", "Y", "Z"].map((axis, i) => `<label>${part.toUpperCase()} ${axis}<output id="lab-value-test-${part}${axis}">${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}</output><input id="lab-test-${part}${axis}" type="range" min="${part === "body" ? -1 : -10}" max="${part === "body" ? 1 : 10}" step=".01" value="${part === "left" && i === 0 ? -4 : part === "right" && i === 0 ? 4 : 0}"></label>`).join("")).join("")}</fieldset><fieldset class="lab-debug"><legend>DEBUG</legend><details class="lab-tracking" open><summary>BODY TRACKING DEBUG</summary>${["WEATHER ONLY", "BODY ONLY", "LEFT HAND ONLY", "RIGHT HAND ONLY", "ALL ON", "ALL OFF"].map((s, i) => `<button data-preset="${i}">${s}</button>`).join("")}<pre id="labDebug"></pre><pre id="labTrackingDebug"></pre><button id="labTrackingCsv">TRACKING CSV</button></details><button id="labResetSettings">RESET SETTINGS</button></fieldset></aside></div>`;
     this.root.dataset.displayMode = "DOT";
     this.$ = (s) => this.root.querySelector(s);
     const details = document.createElement("details");
@@ -222,6 +240,8 @@ export class WindLab {
         this.engine.config.windSpeed,
       );
     };
+    this.$("#labTrackingCsv").onclick = () =>
+      downloadTrackingCsv(this.trackingRows);
     this.$("#labExit").onclick = () => this.onExit();
     this.$("#labCamera").onclick = () => this.toggleCamera();
     this.$("#labSkeleton").onclick = () => {
@@ -240,6 +260,13 @@ export class WindLab {
       this.engine.suspend();
       this.toggleButton("labPc", "PC TEST", this.pc);
       this.$("#labPcPanel").hidden = !this.pc;
+    };
+    this.$("#labPoseTest").onchange = () => {
+      this.poseTest = this.$("#labPoseTest").value;
+      this.sequenceStart = performance.now();
+      this.mapper.resetAvatar();
+      this.engine.suspend();
+      this.avatar.resetTracking();
     };
     this.$("#labAuto").onclick = () => {
       this.auto = !this.auto;
@@ -272,6 +299,7 @@ export class WindLab {
     this.modes.setMode(mode);
     this.root.dataset.displayMode = mode;
     this.$(".lab-details").open = mode === "DOT";
+    this.$(".lab-tracking").open = mode === "DOT";
     this.root
       .querySelectorAll("[data-mode]")
       .forEach((button) =>
@@ -399,8 +427,32 @@ export class WindLab {
     const dt = this.last ? Math.min((t - this.last) / 1000, 0.1) : 0;
     this.last = t;
     this.diagnostics.renderFrames++;
-    if (this.pc) this.acceptInput(this.testSample(t), t, "pc");
-    else if (this.cameraOn && t - this.lastPose >= 33) {
+    if (this.pc) {
+      if (this.poseTest) {
+        const result = poseSequence(
+            this.poseTest,
+            (t - this.sequenceStart) / 1000,
+          ),
+          frame = this.mapper.avatarPose(
+            result.landmarks,
+            result.worldLandmarks,
+          );
+        this.acceptInput(
+          this.mapper.fromPose(result.landmarks, result.worldLandmarks),
+          t,
+          "synthetic_pose",
+        );
+        if (frame)
+          this.avatar.input(
+            {
+              ...frame,
+              source:
+                "SYNTHETIC POSE TEST " + this.poseTest + " / " + frame.source,
+            },
+            t,
+          );
+      } else this.acceptInput(this.testSample(t), t, "pc");
+    } else if (this.cameraOn && t - this.lastPose >= 33) {
       this.lastPose = t;
       try {
         if (
@@ -409,20 +461,28 @@ export class WindLab {
         ) {
           this.lastVideo = this.video.currentTime;
           const result = this.camera.detect(t);
-          const lm = result?.landmarks?.[0];
-          this.diagnostics.poseFrames++;
-          this.diagnostics.landmarkCount = lm?.length || 0;
-          this.acceptInput(
-            this.mapper.fromPose(lm, result?.worldLandmarks?.[0]),
-            t,
-            "pose",
-          );
-          this.avatar.input(
-            this.mapper.avatarPose(lm, result?.worldLandmarks?.[0]),
-            t,
-          );
-          this.lastDetection = lm ? t : 0;
-          this.skeletonDraw(lm);
+          const fresh =
+            result?.timestamp === undefined ||
+            result.timestamp !== this.lastResultTimestamp;
+          const recent =
+            result?.timestamp === undefined || t - result.timestamp <= 500;
+          if (fresh && (result?.timestamp !== undefined || !result?.pending)) {
+            this.lastResultTimestamp = result?.timestamp;
+            const lm = recent ? result?.landmarks?.[0] : null;
+            this.diagnostics.poseFrames++;
+            this.diagnostics.landmarkCount = lm?.length || 0;
+            this.acceptInput(
+              this.mapper.fromPose(lm, result?.worldLandmarks?.[0]),
+              t,
+              "pose",
+            );
+            this.avatar.input(
+              this.mapper.avatarPose(lm, result?.worldLandmarks?.[0]),
+              t,
+            );
+            this.lastDetection = lm ? t : 0;
+            this.skeletonDraw(lm);
+          }
         }
       } catch (e) {
         this.acceptInput(null, t, "pose");
@@ -454,13 +514,17 @@ export class WindLab {
     this.field.update();
     this.debug.update(this.engine);
     if (
-      this.mode === "KIDS" ||
-      (this.mode === "ART" && !this.$(".lab-details").open)
+      this.mode !== "DOT" &&
+      !(this.$(".lab-details").open && this.$(".lab-tracking").open)
     ) {
-      this.debug.spheres.forEach((s) => (s.visible = false));
+      [
+        ...this.debug.spheres,
+        ...this.debug.handMarkers,
+        ...this.debug.handArrows,
+      ].forEach((s) => (s.visible = false));
       this.debug.weatherArrow.visible = false;
     }
-    this.avatar.update(t, dt, this.engine.config);
+    this.avatar.update(t, dt, this.engine.config, this.engine);
     this.avatar.lineMaterial.color.setHex(
       this.mode === "KIDS" ? 0x087f96 : 0x57eaff,
     );
@@ -474,7 +538,19 @@ export class WindLab {
         this.debug.text(this.engine, this.diagnostics) +
         "\n" +
         this.avatar.text();
+      this.$("#labTrackingDebug").textContent = trackingText(
+        this.engine,
+        this.diagnostics,
+        this.avatar,
+      );
       this.lastDebug = t;
+    }
+    if (t - (this.lastTracking || 0) >= 100) {
+      this.lastTracking = t;
+      if (this.trackingRows.length >= 6000) this.trackingRows.shift();
+      this.trackingRows.push(
+        trackingSnapshot(this.engine, this.diagnostics, this.avatar),
+      );
     }
     if (dt > 0.045) this.slowFrames = (this.slowFrames || 0) + 1;
     else this.slowFrames = Math.max(0, (this.slowFrames || 0) - 1);
@@ -528,6 +604,7 @@ export class WindLab {
     this.renderer?.dispose();
     this.renderer?.forceContextLoss();
     this.scene?.clear();
+    this.trackingRows = [];
     this.engine?.dispose();
     this.root.replaceChildren();
   }
