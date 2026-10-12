@@ -97,6 +97,16 @@ export class PosePipeline {
           this.fail(e);
         });
     }
+    if (
+      this.result.timestamp !== undefined &&
+      timestamp - this.result.timestamp > 500
+    )
+      return {
+        landmarks: [],
+        worldLandmarks: [],
+        timestamp: this.result.timestamp,
+        pending: true,
+      };
     return this.result;
   }
   reset() {

@@ -21,6 +21,9 @@ export class HandWind {
       this.target = zero();
       return;
     }
+    // Use time since this hand was last accepted, including short missing samples.
+    if (dt > 0 && Number.isFinite(this.age))
+      dt = Math.max(dt, Math.min(this.age, 0.25));
     const raw = position.map((v) => clamp(v, -SPACE_SIZE / 2, SPACE_SIZE / 2));
     let fresh = !this.previous || this.age > 0.25 || dt <= 0 || dt > 0.25;
     if (

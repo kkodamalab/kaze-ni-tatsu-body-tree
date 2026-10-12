@@ -273,7 +273,7 @@ npm run build
 PLAYWRIGHT_MODULE=/workspace/.onboarding/wind-tree/node_modules/playwright/index.mjs node tests/phase5-browser.mjs
 ```
 
-単体53件と7ブラウザスイートで、A〜G、全粒子/局所風、サイズ変更後の手首一致、ノイズ/ジャンプ/欠損、
+単体54件と7ブラウザスイートで、A〜G、全粒子/局所風、サイズ変更後の手首一致、ノイズ/ジャンプ/欠損、
 校正、CSV、遅いWorkerでもRAF継続、単一モデル、1000/8000粒子、既存ゲーム・成長・笑顔PHOTOを確認します。
 実モデルのWorker推論・Face推論と生成カメラ、実Open-Meteo取得は任意のオンラインテストでも確認します。
 visibility/presenceは[MediaPipe公式型定義](https://github.com/google-ai-edge/mediapipe/blob/master/mediapipe/tasks/web/components/containers/landmark.d.ts)を確認しました。

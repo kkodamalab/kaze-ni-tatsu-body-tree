@@ -184,6 +184,8 @@ test("shared Pose worker accepts delayed results without blocking callers, disca
     },
   });
   assert.equal(p.result.timestamp, 200);
+  assert.equal(p.detectForVideo(video, 900).pending, true);
+  assert.deepEqual(p.detectForVideo(video, 900).landmarks, []);
   p.close();
   p.close();
   assert.equal(closed, 1);
@@ -211,4 +213,13 @@ test("isolated body-axis outlier is rejected; stable new posture reacquires with
   for (let i = 0; i < 3; i++) b.input([1, 0, 0], 0.016);
   assert.deepEqual(b.raw, [1, 0, 0]);
   assert.deepEqual(b.rate, [0, 0, 0]);
+});
+
+test("short hand gaps use accepted-sample elapsed time rather than the missing-frame timestamp", () => {
+  const h = new HandWind("left");
+  h.input([0, 0, 0], 0, cfg);
+  h.input(null, 0.05, cfg);
+  h.update(0.15, cfg);
+  h.input([0.15, 0, 0], 0.05, cfg);
+  assert.ok(h.target[0] > 0.5 && h.target[0] < 1.1);
 });
