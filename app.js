@@ -503,6 +503,16 @@ function render() {
   const W = innerWidth,
     H = innerHeight;
   ctx.clearRect(0, 0, W, H);
+  if (!$("#start").classList.contains("hidden")) {
+    ctx.save();
+    ctx.translate(
+      Math.sin(performance.now() / 4500) * 8,
+      Math.sin(performance.now() / 3000) * 12,
+    );
+    autumn.draw(ctx, 4);
+    ctx.restore();
+    return;
+  }
   ctx.fillStyle = "rgba(255,255,255,.65)";
   for (let i = 0; i < 4; i++) {
     const x = ((performance.now() / 70 + (i * W) / 3) % (W + 180)) - 90,

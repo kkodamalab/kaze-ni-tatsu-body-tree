@@ -149,8 +149,9 @@ export class AutumnLeaves {
           this.leaves[i] = this.makeLeaf();
       }
   }
-  draw(ctx) {
-    for (const p of this.leaves) {
+  draw(ctx, stride = 1) {
+    for (let i = 0; i < this.leaves.length; i += stride) {
+      const p = this.leaves[i];
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rotation);

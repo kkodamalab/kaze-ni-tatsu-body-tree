@@ -49,6 +49,7 @@ async function replay() {
 try {
   await page.clock.install();
   await page.goto(process.env.TEST_URL || "http://127.0.0.1:8000/");
+  await page.locator("#homeDetails > summary").click();
   await page.locator("#durationNumber").fill("61");
   await page.click("#testBtn");
   assert.equal((await state()).clock.phase, "idle");
@@ -66,6 +67,7 @@ try {
     assert.equal((await state()).gains[side], 3);
   }
   await page.reload();
+  await page.locator("#homeDetails > summary").click();
   assert.deepEqual((await state()).sensitivities, {
     body: 100,
     left: 100,

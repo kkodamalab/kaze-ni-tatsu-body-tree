@@ -121,7 +121,14 @@ test("component switches and zero sensitivities are independent; ALL ON sums wea
   e.body.value = [2, 0, 0];
   e.body.raw = [0.4, 0, 0];
   e.body.age = 0;
-  e.configure({ ...e.config, bodyDeadZone: 0 });
+  e.configure({
+    ...e.config,
+    bodyDeadZone: 0,
+    bodySensitivity: 100,
+    leftSensitivity: 100,
+    rightSensitivity: 100,
+    handGain: 100,
+  });
   e.left.position = e.right.position = [0, 0, 0];
   e.left.velocity = e.left.target = [3, 0, 0];
   e.right.velocity = e.right.target = [4, 0, 0];

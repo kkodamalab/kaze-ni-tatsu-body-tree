@@ -1,0 +1,208 @@
+{
+  "baselineCommit": "8f73c5deeb04f24a2bb49f985862e4ae124ebe17",
+  "method": "1000 particles, 2 seconds, 60Hz physics, 30Hz position input (except 300ms gap). Body: 3 degree tilt. Hands: 0.4 world units/s. Mean displacement: actual final minus initial positions, all particles. No human camera.",
+  "comparison": [
+    {
+      "kind": "body",
+      "before": {
+        "preset": "LEGACY",
+        "kind": "body",
+        "inputSpeed": 0.4,
+        "peakWrist": 0,
+        "peakWind": 0.08727064437018893,
+        "meanSpeed": 0.08725117146968842,
+        "peakSpeed": 0.08725117146968842,
+        "meanDisplacement": 0.13716269731521608,
+        "last1s": null,
+        "insideMoved": 0,
+        "outsideMoved": 0,
+        "fieldCount": 0
+      },
+      "after": {
+        "preset": "NORMAL",
+        "kind": "body",
+        "inputSpeed": 0.4,
+        "peakWrist": 0,
+        "peakWind": 0.3055566831041157,
+        "meanSpeed": 0.305547833442688,
+        "peakSpeed": 0.305547833442688,
+        "meanDisplacement": 0.5070025205612183,
+        "last1s": 0.30502545535564535,
+        "insideMoved": 0,
+        "outsideMoved": 0,
+        "fieldCount": 0
+      }
+    },
+    {
+      "kind": "left",
+      "before": {
+        "preset": "LEGACY",
+        "kind": "left",
+        "inputSpeed": 0.4,
+        "peakWrist": 0.4333902885452662,
+        "peakWind": 0.4081741034476841,
+        "meanSpeed": 0.005025803536176682,
+        "peakSpeed": 0.005025803536176682,
+        "meanDisplacement": 0.007766886472702027,
+        "last1s": null,
+        "insideMoved": 8,
+        "outsideMoved": 0,
+        "fieldCount": 0
+      },
+      "after": {
+        "preset": "NORMAL",
+        "kind": "left",
+        "inputSpeed": 0.4,
+        "peakWrist": 0.44556123667720826,
+        "peakWind": 1.4639764851207,
+        "meanSpeed": 0.046202772080898284,
+        "peakSpeed": 0.046202772080898284,
+        "meanDisplacement": 0.07732106685638428,
+        "last1s": 0.045236156582832476,
+        "insideMoved": 56,
+        "outsideMoved": 0,
+        "fieldCount": 104
+      }
+    },
+    {
+      "kind": "right",
+      "before": {
+        "preset": "LEGACY",
+        "kind": "right",
+        "inputSpeed": 0.4,
+        "peakWrist": 0.4333902885452662,
+        "peakWind": 0.4081741034476841,
+        "meanSpeed": 0.005025803536176682,
+        "peakSpeed": 0.005025803536176682,
+        "meanDisplacement": 0.007766886472702027,
+        "last1s": null,
+        "insideMoved": 8,
+        "outsideMoved": 0,
+        "fieldCount": 0
+      },
+      "after": {
+        "preset": "NORMAL",
+        "kind": "right",
+        "inputSpeed": 0.4,
+        "peakWrist": 0.44556123667720826,
+        "peakWind": 1.4639764851207,
+        "meanSpeed": 0.046202772080898284,
+        "peakSpeed": 0.046202772080898284,
+        "meanDisplacement": 0.07732106685638428,
+        "last1s": 0.045236156582832476,
+        "insideMoved": 56,
+        "outsideMoved": 0,
+        "fieldCount": 104
+      }
+    }
+  ],
+  "gap": {
+    "before": {
+      "preset": "LEGACY",
+      "kind": "left",
+      "inputSpeed": 0.4,
+      "peakWrist": 0,
+      "peakWind": 0,
+      "meanSpeed": 0,
+      "peakSpeed": 0,
+      "meanDisplacement": 0,
+      "last1s": null,
+      "insideMoved": 0,
+      "outsideMoved": 0,
+      "fieldCount": 0
+    },
+    "after": {
+      "preset": "NORMAL",
+      "kind": "left",
+      "inputSpeed": 0.4,
+      "peakWrist": 0.40000000000000036,
+      "peakWind": 1.3876737908646488,
+      "meanSpeed": 0.03992375789582729,
+      "peakSpeed": 0.04078461372852325,
+      "meanDisplacement": 0.056155609607696534,
+      "last1s": 0.0373134562969209,
+      "insideMoved": 56,
+      "outsideMoved": 0,
+      "fieldCount": 100
+    }
+  },
+  "preset": [
+    {
+      "preset": "SOFT",
+      "kind": "left",
+      "inputSpeed": 0.4,
+      "peakWrist": 0.43649996788121925,
+      "peakWind": 0.4101179653694956,
+      "meanSpeed": 0.0050263312608003615,
+      "peakSpeed": 0.0050263312608003615,
+      "meanDisplacement": 0.00787820553779602,
+      "last1s": 0.004779279232025162,
+      "insideMoved": 8,
+      "outsideMoved": 0,
+      "fieldCount": 40
+    },
+    {
+      "preset": "NORMAL",
+      "kind": "left",
+      "inputSpeed": 0.4,
+      "peakWrist": 0.44556123667720826,
+      "peakWind": 1.4639764851207,
+      "meanSpeed": 0.046202772080898284,
+      "peakSpeed": 0.046202772080898284,
+      "meanDisplacement": 0.07732106685638428,
+      "last1s": 0.045236156582832476,
+      "insideMoved": 56,
+      "outsideMoved": 0,
+      "fieldCount": 104
+    },
+    {
+      "preset": "STRONG",
+      "kind": "left",
+      "inputSpeed": 0.4,
+      "peakWrist": 0.44690952674197537,
+      "peakWind": 2.366161303914715,
+      "meanSpeed": 0.0874183605142316,
+      "peakSpeed": 0.09142624002508819,
+      "meanDisplacement": 0.15821114873886108,
+      "last1s": 0.0891050749421123,
+      "insideMoved": 56,
+      "outsideMoved": 0,
+      "fieldCount": 124
+    }
+  ],
+  "presetValues": {
+    "SOFT": {
+      "bodySensitivity": 100,
+      "bodyDeadZone": 2,
+      "bodySmoothing": 30,
+      "leftSensitivity": 100,
+      "rightSensitivity": 100,
+      "handSpeedThreshold": 0.08,
+      "handSmoothing": 25,
+      "handRadius": 20,
+      "handGain": 100
+    },
+    "NORMAL": {
+      "bodySensitivity": 175,
+      "bodyDeadZone": 1,
+      "bodySmoothing": 18,
+      "leftSensitivity": 175,
+      "rightSensitivity": 175,
+      "handSpeedThreshold": 0.04,
+      "handSmoothing": 12,
+      "handRadius": 28,
+      "handGain": 200
+    },
+    "STRONG": {
+      "bodySensitivity": 250,
+      "bodyDeadZone": 0.6,
+      "bodySmoothing": 12,
+      "leftSensitivity": 225,
+      "rightSensitivity": 225,
+      "handSpeedThreshold": 0.03,
+      "handSmoothing": 10,
+      "handRadius": 30,
+      "handGain": 250
+    }
+  }
+}

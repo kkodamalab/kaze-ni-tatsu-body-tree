@@ -1,3 +1,4 @@
+import { WIND_COLORS } from "./WindColors.js";
 import * as THREE from "../../vendor/three/three.module.js";
 import { SPACE_SIZE } from "./WindConfig.js";
 export class WindDebug {
@@ -5,7 +6,7 @@ export class WindDebug {
     this.scene = scene;
     this.axes = new THREE.AxesHelper(12);
     scene.add(this.axes);
-    this.spheres = [0x57eaff, 0xffa56b].map((color) => {
+    this.spheres = [WIND_COLORS.left, WIND_COLORS.right].map((color) => {
       const mesh = new THREE.Mesh(
         new THREE.SphereGeometry(1, 16, 10),
         new THREE.MeshBasicMaterial({
@@ -19,7 +20,7 @@ export class WindDebug {
       scene.add(mesh);
       return mesh;
     });
-    this.handMarkers = [0x57eaff, 0xffa56b].map((color) => {
+    this.handMarkers = [WIND_COLORS.left, WIND_COLORS.right].map((color) => {
       const m = new THREE.Mesh(
         new THREE.SphereGeometry(0.18, 8, 6),
         new THREE.MeshBasicMaterial({ color, depthTest: false }),
@@ -28,7 +29,7 @@ export class WindDebug {
       scene.add(m);
       return m;
     });
-    this.handArrows = [0x57eaff, 0xffa56b].map((color) => {
+    this.handArrows = [WIND_COLORS.left, WIND_COLORS.right].map((color) => {
       const a = new THREE.ArrowHelper(
         new THREE.Vector3(1, 0, 0),
         new THREE.Vector3(),
