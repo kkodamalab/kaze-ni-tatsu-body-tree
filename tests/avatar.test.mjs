@@ -85,7 +85,8 @@ test("world and normalized Pose: 33 points, hip origin, mirror, depth and bounde
   lm[15].visibility = 0;
   assert.equal(mapper.avatarPose(lm).points[15], null);
   lm[23].visibility = 0;
-  assert.equal(mapper.avatarPose(lm), null);
+  assert.equal(mapper.avatarPose(lm).points[23], null);
+  assert.equal(mapper.fromPose(lm).body, null);
 });
 test("33-point Pose fixtures preserve left/right tilt, lifted arms, depth and knee bend", () => {
   const lm = fixture(),
@@ -177,4 +178,28 @@ test("invalid landmarks omit joints and connecting bones; large PC poses stay in
   assert.ok(a.rendered.every((v) => Math.abs(v) <= 9.80001));
   assert.ok(a.lineGeometry.drawRange.count < 70);
   a.dispose();
+});
+
+test("upper-body Pose remains drawable with missing hips, preserves wrist wind coordinates", () => {
+  const lm = fixture();
+  lm[23].visibility = lm[24].visibility = 0.1;
+  const frame = mapper.avatarPose(lm);
+  assert.equal(frame.origin, "ESTIMATED FROM SHOULDERS");
+  assert.equal(frame.points.filter(Boolean).length, 31);
+  assert.equal(frame.points[23], null);
+  assert.deepEqual(frame.windHands.left, mapper.fromPose(lm).left);
+  assert.equal(mapper.fromPose(lm).body, null);
+  const avatar = new SkeletonAvatar(new THREE.Scene());
+  for (let t = 0; t < 2000; t += 100) {
+    avatar.input(frame, t);
+    avatar.update(t, 0.1, { ...DEFAULTS, avatar: true, avatarSize: 183 });
+    assert.equal(avatar.group.visible, true);
+    assert.equal(avatar.validCount, 31);
+    assert.ok(avatar.lineGeometry.drawRange.count > 0);
+  }
+  avatar.input({ points: Array(33).fill(null), source: "EMPTY" }, 2100);
+  avatar.update(2800, 0.1, { ...DEFAULTS, avatar: true });
+  assert.equal(avatar.group.visible, false);
+  assert.match(avatar.text(), /HIDDEN REASON POSE EXPIRED/);
+  avatar.dispose();
 });

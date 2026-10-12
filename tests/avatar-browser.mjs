@@ -55,7 +55,15 @@ try {
   for (const m of ["DOT", "KIDS", "ART"]) {
     await mode(m);
     await page.locator("#lab-axes").uncheck();
-    await wait(() => !avatarAudit.lab.debug.axes.visible);
+    await wait(
+      () =>
+        !avatarAudit.lab.debug.axes.visible &&
+        !avatarAudit.lab.debug.weatherArrow.visible,
+    );
+    assert.equal(await page.locator("#lab-avatar-axes").isChecked(), false);
+    await page.locator("#lab-avatar-axes").check();
+    assert.equal(await page.locator("#lab-axes").isChecked(), true);
+    await page.locator("#lab-avatar-axes").uncheck();
     await page.locator("#lab-axes").check();
     await wait(() => avatarAudit.lab.debug.axes.visible);
     await page.locator("#lab-avatar").check();
@@ -64,7 +72,7 @@ try {
       await page.evaluate(() => avatarAudit.lab.avatar.source),
       "PC TEST SYNTHETIC",
     );
-    for (const size of [20, 100, 300]) {
+    for (const size of [20, 100, 183, 300]) {
       await page.locator("#lab-avatarSize").fill(String(size));
       await wait(
         () =>
@@ -202,11 +210,39 @@ try {
       .textContent.includes("AVATAR LEFT wrist"),
   );
   assert.match(await page.locator("#labDebug").textContent(), /LEFT position/);
+  await page.evaluate(() => {
+    avatarAudit.landmarks[23].visibility =
+      avatarAudit.landmarks[24].visibility = 0.1;
+  });
+  for (const m of ["DOT", "KIDS", "ART"]) {
+    await mode(m);
+    for (const size of [20, 100, 183, 300]) {
+      await page.evaluate((size) => {
+        const l = avatarAudit.lab;
+        l.apply({ ...l.engine.config, avatarSize: size });
+      }, size);
+      await wait(() => avatarAudit.lab.avatar.validCount === 31);
+      await page.waitForTimeout(800);
+      assert.equal(
+        await page.evaluate(
+          () =>
+            avatarAudit.lab.avatar.group.visible &&
+            avatarAudit.lab.avatar.lineGeometry.drawRange.count > 0,
+        ),
+        true,
+      );
+    }
+  }
   await page.evaluate(() => (avatarAudit.landmarks = null));
   await wait(() => avatarAudit.lab.avatar.state === "LOST");
   assert.equal(
     await page.evaluate(() => avatarAudit.lab.avatar.group.visible),
     false,
+  );
+  await wait(() => !document.querySelector("#labAvatarStatus").hidden);
+  assert.match(
+    await page.locator("#labAvatarStatus").textContent(),
+    /LAST POSE AGE[\s\S]*RENDER VISIBLE NO[\s\S]*HIDDEN REASON POSE EXPIRED/,
   );
   await page.evaluate((lm) => (avatarAudit.landmarks = lm), lm);
   await wait(
@@ -257,7 +293,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: XYZ all modes/no resets/storage; shared 33-point avatar size/style/PC TEST and synthetic 33-point Pose fixtures/world fallback/gestures/fade/recovery; one camera/Pose; 8000 particles; 60 toggles without GPU growth; mobile/disposal (no real participant)",
+    "PASS: XYZ shared controls/all modes/no resets/storage; upper-body Pose31 joints at20/100/183/300 and missing-pose diagnostics; shared 33-point avatar size/style/PC TEST and synthetic 33-point Pose fixtures/world fallback/gestures/fade/recovery; one camera/Pose; 8000 particles; 60 toggles without GPU growth; mobile/disposal (no real participant)",
   );
 } finally {
   await browser.close();

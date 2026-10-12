@@ -34,7 +34,7 @@ await page.route("**/app.js", (r) =>
 await page.route("**/pose-worker.js", (r) =>
   r.fulfill({
     contentType: "application/javascript",
-    body: `let sequence,kind='A',start=null,delay=0;self.onmessage=async({data:d})=>{if(d.type==='init'){({poseSequence:sequence}=await import('./src/wind-lab/PoseSequences.js'));self.postMessage({type:'ready'});}if(d.type==='test'){kind=d.kind;start=null;delay=d.delay||0;}if(d.type==='frame'){start??=d.timestamp;const sample=sequence(kind,(d.timestamp-start)/1000);d.bitmap.close();setTimeout(()=>self.postMessage({type:'result',timestamp:d.timestamp,generation:d.generation,inferenceMs:delay,result:{landmarks:sample.landmarks?[sample.landmarks]:[],worldLandmarks:sample.worldLandmarks?[sample.worldLandmarks]:[]}}),delay);}}`,
+    body: `let sequence,kind='A',start=null,delay=0;self.onmessage=async({data:d})=>{if(d.type==='init'){({poseSequence:sequence}=await import('./src/wind-lab/PoseSequences.js'));self.postMessage({type:'ready'});}if(d.type==='test'){kind=d.kind;start=null;delay=d.delay||0;}if(d.type==='frame'){start??=d.timestamp;const sample=sequence(kind==='H'?'A':kind,(d.timestamp-start)/1000);if(kind==='H'){sample.landmarks[23].visibility=sample.landmarks[24].visibility=.1;sample.worldLandmarks=null;}d.bitmap.close();setTimeout(()=>self.postMessage({type:'result',timestamp:d.timestamp,generation:d.generation,inferenceMs:delay,result:{landmarks:sample.landmarks?[sample.landmarks]:[],worldLandmarks:sample.worldLandmarks?[sample.worldLandmarks]:[]}}),delay);}}`,
   }),
 );
 await page.route("https://**/*", (r) => r.abort());
@@ -68,6 +68,23 @@ try {
     () => phase5.lab.cameraOn && phase5.pose.result?.timestamp > 0,
   );
   assert.equal(workers, 1);
+  await set("H");
+  await page.waitForFunction(
+    () =>
+      phase5.lab.avatar.validCount === 31 && phase5.lab.avatar.group.visible,
+  );
+  await page.waitForTimeout(1100);
+  assert.ok(
+    await page.evaluate(
+      () =>
+        phase5.lab.avatar.group.visible &&
+        phase5.lab.avatar.lineGeometry.drawRange.count > 0 &&
+        phase5.lab.avatar.poseAge < 250,
+    ),
+  );
+  await set("A");
+  await page.waitForFunction(() => phase5.lab.avatar.validCount === 33);
+
   await preset("BODY ONLY");
   await set("A");
   await page.waitForTimeout(400);
@@ -213,7 +230,7 @@ try {
   assert.equal(await page.evaluate(() => phase5.pose), null);
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: A–G shared Pose mapper/physics; body/depth/calibration/local hands; wrist=physical center at20/100/300 and all modes; one shared worker; loss/recovery; delayed inference keeps RAF; tracking CSV/folded debug;8000 particles/disposal (synthetic only)",
+    "PASS: A–G shared Pose mapper/physics; Worker low-hip-confidence continuous31-joint avatar; body/depth/calibration/local hands; wrist=physical center at20/100/300 and all modes; one shared worker; loss/recovery; delayed inference keeps RAF; tracking CSV/folded debug;8000 particles/disposal (synthetic only)",
   );
 } finally {
   await browser.close();
